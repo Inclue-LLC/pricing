@@ -120,7 +120,7 @@ input:disabled,select:disabled{background:var(--sunken)}
 .plist .pl small{font-size:11px;color:var(--muted)}
 .plist .sub{display:block;font-size:11px;color:var(--muted);font-weight:400}
 .chartag{font-size:12px;font-weight:700;color:var(--brand);background:var(--brand-soft);padding:2px 10px;border-radius:99px}
-.est-list .nm{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.est-list .nm{font-weight:700;line-height:1.45;overflow-wrap:anywhere}
 .est-list .dt{font-size:11px;color:var(--muted)}
 .steps{display:flex;flex-direction:column;gap:2px}
 .steps a{display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:8px;color:var(--ink);text-decoration:none;font-size:13px}
@@ -134,6 +134,7 @@ main{display:flex;flex-direction:column;gap:22px;min-width:0}
 .titlerow{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;justify-content:space-between}
 .infocard{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:16px 20px;display:flex;flex-direction:column;gap:12px}
 .infocard .grow{flex:1;min-width:240px}
+.infocard .theme{flex:0 1 220px;min-width:140px}
 .infocard label{font-size:12px;font-weight:700;color:var(--brand)}
 .title-in{font-family:var(--font-display);font-size:22px;font-weight:700;padding:8px 12px;width:100%}
 .info-grid{display:grid;grid-template-columns:minmax(200px,2fr) minmax(160px,1fr);gap:12px}
@@ -303,6 +304,7 @@ table.in td input.name{width:100%;min-width:140px}
   <main id="main"></main>
 </div>
 <datalist id="charOptions"></datalist>
+<datalist id="themeOptions"></datalist>
 
 <script>
 (function(){
@@ -334,10 +336,13 @@ const cls=v=>v==null||!isFinite(v)?"":(v<0?"neg":"pos");
 const today=()=>new Date().toISOString().slice(0,10);
 const fmtDate=s=>{if(!s)return"";const d=new Date(s);if(isNaN(d))return"";return `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`};
 const charOf=d=>(d&&String(d.character||"").trim())||NOCHAR;
+// list label: 【テーマ】商品名（サイズ）
+const titleOf=d=>{const t=String(d?.theme||"").trim(),nm=String(d?.name||"").trim(),h=d?.size?.height;
+  return `${t?`【${t}】`:""}${nm||"商品名未入力"}${h!=null&&h!==""&&isFinite(parseFloat(h))?`（${parseFloat(h)}cm）`:""}`};
 
 function newDoc(fx){
   return {
-    name:"",character:charFilter&&charFilter!==NOCHAR?charFilter:"",memo:"",
+    theme:"",name:"",character:charFilter&&charFilter!==NOCHAR?charFilter:"",memo:"",
     fx:{CNY:fx.CNY,USD:fx.USD,auto:true},
     lossRate:5,dutyRate:0,importTaxRate:10,
     qty:{jpOff:null,jpOn:null,cnOff:null,cnOn:null},
@@ -529,7 +534,7 @@ function renderList(){
   const items=list.length?list:(doc&&!localOnly?[{id:curId,data:doc}]:localOnly&&doc?[{id:curId,data:doc}]:[]);
   const rows=items.filter(e=>!charFilter||charOf(e.id===curId&&doc?doc:e.data)===charFilter)
     .map(e=>({id:e.id,...summarize(e.id===curId&&doc?doc:e.data)}))
-    .sort((a,b)=>charOf(a.d).localeCompare(charOf(b.d),"ja")||String(a.d.name||"").localeCompare(String(b.d.name||""),"ja"));
+    .sort((a,b)=>charOf(a.d).localeCompare(charOf(b.d),"ja")||titleOf(a.d).localeCompare(titleOf(b.d),"ja"));
   const rc=v=>v==null?"":`<span class="rate ${rateCls(v)}">${pct(v)}</span>`;
   // up to two price patterns stacked in each cell, the rest summarised as "他◯パターン"
   const stack=(x,f)=>x.pats.length?x.pats.map(f).join(""):'<span class="muted">—</span>';
@@ -550,7 +555,7 @@ function renderList(){
         <th class="r cn">原価/個</th><th class="r cn">販売価格</th><th class="cn">原価率</th><th class="r cn">利益/個</th></tr>
     </thead>
     <tbody>${rows.map(r=>`<tr data-open="${esc(r.id)}" tabindex="0">
-      <td><b>${esc(r.d.name||"商品名未入力")}</b></td>
+      <td><b>${esc(titleOf(r.d))}</b></td>
       <td><span class="chartag">${esc(charOf(r.d))}</span></td>
       <td class="num">${has(r.d.size.height)?esc(r.d.size.height)+"cm":"—"}</td>
       <td class="num">${r.jp.qty.toLocaleString()} / ${r.cn.qty.toLocaleString()}</td>
@@ -574,6 +579,7 @@ function render(){
   <div id="modeNote" class="notice" hidden></div>
   <section class="infocard">
     <div class="titlerow">
+      <div class="field theme"><label for="f-theme">テーマ</label><input id="f-theme" class="title-in" data-path="theme" value="${esc(d.theme||"")}" list="themeOptions" placeholder="入力"></div>
       <div class="field grow"><label for="f-name">商品名</label><input id="f-name" class="title-in" data-path="name" value="${esc(d.name)}" placeholder="入力"></div>
       <div class="actions">
         <button data-act="dup">複製</button>
@@ -775,7 +781,7 @@ function updateOutputs(){
       </div></div>`;
   }).join("");
   const mini=$("#mini");
-  if(mini)mini.innerHTML=`<strong>${esc(doc.name||"商品名未入力")}</strong><span class="p"><span class="tag jp">日本 原価</span><b>${yen(R.costJP)}</b></span><span class="p"><span class="tag cn">中国 原価</span><b>${yen(R.costCN)}</b></span>`;
+  if(mini)mini.innerHTML=`<strong>${esc(titleOf(doc))}</strong><span class="p"><span class="tag jp">日本 原価</span><b>${yen(R.costJP)}</b></span><span class="p"><span class="tag cn">中国 原価</span><b>${yen(R.costCN)}</b></span>`;
 }
 
 function renderSide(){
@@ -786,7 +792,8 @@ function renderSide(){
   if(charFilter&&!counts[charFilter])charFilter="";
   $("#charChips").innerHTML=`<button class="chip" data-filter="" aria-pressed="${!charFilter}">すべて<span class="cnt">${view.length}</span></button>`+chars.map(c=>`<button class="chip" data-filter="${esc(c)}" aria-pressed="${charFilter===c}">${esc(c)}<span class="cnt">${counts[c]}</span></button>`).join("");
   const shown=chars.filter(c=>!charFilter||c===charFilter);
-  $("#estGroups").innerHTML=view.length?shown.map(c=>`<div><div class="grp-h">${esc(c)}</div><ul class="est-list">${view.filter(v=>charOf(v.d)===c).map(v=>`<li><button data-open="${esc(v.id)}"${v.id===curId?' aria-current="true"':""}><span class="nm">${esc(v.d.name||"商品名未入力")}</span><span class="dt">${v.d.updatedAt?"更新 "+fmtDate(v.d.updatedAt):"未保存"}</span></button></li>`).join("")}</ul></div>`).join(""):`<p class="small muted">まだありません</p>`;
+  $("#estGroups").innerHTML=view.length?shown.map(c=>`<div><div class="grp-h">${esc(c)}</div><ul class="est-list">${view.filter(v=>charOf(v.d)===c).map(v=>`<li><button data-open="${esc(v.id)}"${v.id===curId?' aria-current="true"':""}><span class="nm">${esc(titleOf(v.d))}</span><span class="dt">${v.d.updatedAt?"更新 "+fmtDate(v.d.updatedAt):"未保存"}</span></button></li>`).join("")}</ul></div>`).join(""):`<p class="small muted">まだありません</p>`;
+  $("#themeOptions").innerHTML=[...new Set(view.map(v=>String(v.d.theme||"").trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"ja")).map(t=>`<option value="${esc(t)}"></option>`).join("");
   $("#charOptions").innerHTML=chars.filter(c=>c!==NOCHAR).map(c=>`<option value="${esc(c)}"></option>`).join("");
   $("#btnNew").disabled=!canWrite;
 }
@@ -811,7 +818,7 @@ document.addEventListener("input",e=>{
   if(am&&doc.logistics[+am[1]].intlRow)doc.logistics[+am[1]].auto=v==null;
   if((t.tagName==="SELECT"&&p.endsWith(".target"))||p==="intl.service")render();
   else updateOutputs();
-  if(p==="name")renderSide();
+  if(p==="name"||p==="theme"||p==="size.height")renderSide();
   touch();
 });
 document.addEventListener("change",e=>{if(e.target.dataset?.path==="character")renderSide()});
