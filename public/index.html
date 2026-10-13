@@ -869,7 +869,7 @@ async function save(){
     const ml=$("#metaLine");if(ml)ml.textContent="最終更新 "+fmtDate(body.updatedAt);
   }catch(err){
     dirty=true;
-    if(err&&(err.code==="invalid_argument"||err.code==="permission-denied")){setStatus("保存できません。共有リンクが正しいか確認してください","err")}
+    if(err&&(err.code==="invalid_argument"||err.code==="permission-denied")){setStatus("保存できませんでした。もう一度お試しください","err")}
     else if(err&&err.code==="quota_exceeded")setStatus("保存容量の上限に達しました","err");
     else setStatus("保存できませんでした。もう一度お試しください","err");
   }
@@ -903,9 +903,6 @@ function remember(k,v){try{localStorage.setItem(k,v||"")}catch(e){}}
 function recall(k){try{return localStorage.getItem(k)}catch(e){return null}}
 
 /* ---------- boot ---------- */
-function showNoKey(){
-  document.querySelector(".layout").innerHTML=`<main style="grid-column:1/-1"><section class="card empty"><h2>このページは共有リンクから開いてください</h2><p class="muted">原価計算は、社内で共有している専用のリンク（URLの最後に # から始まる合言葉が付いたもの）からのみ使えます。リンクは管理者に確認してください。</p></section></main>`;
-}
 function bootLocal(){
   localOnly=true;
   curId="local";doc=normalize(newDoc(DEFAULT_FX));
@@ -913,13 +910,10 @@ function bootLocal(){
 }
 render();
 (async()=>{
-  // The workspace key lives in the URL hash (#<key>); only people who have the full link can reach the data.
-  const key=decodeURIComponent(location.hash.slice(1)).trim();
-  if(!/^[A-Za-z0-9_-]{32,}$/.test(key)){showNoKey();return}
   if(!window.firebase||!window.FIREBASE_CONFIG||!window.FIREBASE_CONFIG.projectId){bootLocal();setStatus("Firebaseの設定が未完了です","err");return}
   firebase.initializeApp(window.FIREBASE_CONFIG);
-  const root=firebase.firestore().collection("spaces").doc(key);
-  db={collection:p=>root.collection(p),doc:p=>{const [c,d]=p.split("/");return root.collection(c).doc(d)}};
+  const fs=firebase.firestore();
+  db={collection:p=>fs.collection(p),doc:p=>fs.doc(p)};
   localOnly=false;
   setStatus("読み込み中…","busy");
   db.doc("settings/fx").onSnapshot(s=>{if(s.exists){commonFx={...DEFAULT_FX,...s.data()};updateOutputs()}},()=>{});
