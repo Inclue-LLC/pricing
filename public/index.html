@@ -11,22 +11,22 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&family=Zen+Maru+Gothic:wght@500;700&display=swap">
 <style>
 body{margin:0}img{max-width:100%}
-/* Light only (by request), beige brand. Each input step has its own color, reused in the nav badges and the cost bar.
-   Layout: web-app shell — beige header, left sidebar (estimates grouped by character), main column with the result summary first, numbered input steps below */
+/* Light only (by request), blue brand. Each input step has its own color, reused in the nav badges and the cost bar.
+   Layout: web-app shell — blue header, left sidebar (estimates grouped by character), main column with the result summary first, numbered input steps below */
 :root{
-  --bg:#FAF7F2; --surface:#FFFFFF; --sunken:#F4F1EC; --ink:#1F2230; --muted:#625F6B; --line:#E3DDD3;
-  --brand:#8C6B47; --brand-soft:#F3EADD; --brand-ink:#FFFFFF; --beige:#E6D5BE; --beige-ink:#3B2E22;
-  --jp:#2E4A97; --jp-soft:#EAEFFB; --cn:#1C826A; --cn-soft:#E4F4EF;
+  --bg:#F3F6FB; --surface:#FFFFFF; --sunken:#EDF1F8; --ink:#18213A; --muted:#5A6479; --line:#D8E0EC;
+  --brand:#2563C9; --brand-soft:#E6EEFB; --brand-ink:#FFFFFF; --header:#1F57B8; --header-ink:#FFFFFF;
+  --jp:#16306B; --jp-soft:#E3E9F5; --cn:#1C826A; --cn-soft:#E4F4EF;
   --good:#1C7A4C; --bad:#B0242F;
-  --shadow:0 1px 2px rgb(60 40 20 / .06),0 4px 14px rgb(60 40 20 / .05);
+  --shadow:0 1px 2px rgb(20 40 90 / .06),0 4px 14px rgb(20 40 90 / .06);
   --font-display:"Zen Maru Gothic","Hiragino Maru Gothic ProN","Yu Gothic",sans-serif;
   --font-body:"Zen Kaku Gothic New","Hiragino Sans","Yu Gothic","Meiryo",sans-serif;
   --r:12px;
-  --input-bg:#FFFBEC; --input-line:#D6C6A8;
-  --c-basic:#7A6650; --c-basic-soft:#F2ECE3;
+  --input-bg:#F6F9FF; --input-line:#B5C8E8;
+  --c-basic:#4B5B7A; --c-basic-soft:#EAEEF5;
   --c-qty:#0B8793;   --c-qty-soft:#E1F4F5;
   --c-mfg:#E0761A;   --c-mfg-soft:#FDF0E3;
-  --c-log:#2A84CF;   --c-log-soft:#E5F1FB;
+  --c-log:#0A8FB3;   --c-log-soft:#E0F3F8;
   --c-duty:#D04848;  --c-duty-soft:#FBE8E8;
   --c-tax:#A8479B;   --c-tax-soft:#F8E9F5;
   --c-fee:#8C8577;
@@ -65,22 +65,22 @@ button:disabled{opacity:.45;cursor:not-allowed}
 /* editable fields get a warm fill and visible border so they read as "type here"; computed values stay plain text */
 input,select{font:inherit;color:var(--ink);background:var(--input-bg);border:1.5px solid var(--input-line);border-radius:7px;padding:6px 9px;min-width:0}
 input:hover,select:hover{border-color:var(--brand)}
-input:focus,select:focus{outline:none;border-color:var(--brand);background:#fff;box-shadow:0 0 0 3px rgb(140 107 71 / .22)}
-input::placeholder{color:#A99F8C}
+input:focus,select:focus{outline:none;border-color:var(--brand);background:#fff;box-shadow:0 0 0 3px rgb(37 99 201 / .22)}
+input::placeholder{color:#97A3BA}
 input[type=checkbox]{width:17px;height:17px;accent-color:var(--brand)}
 input[type=number]{text-align:right;font-variant-numeric:tabular-nums}
 input:disabled,select:disabled{background:var(--sunken)}
 
 /* site header */
-.site-header{position:sticky;top:0;z-index:20;background:var(--beige);color:var(--beige-ink);border-bottom:1px solid #D4BFA2;box-shadow:0 2px 8px rgb(90 60 30 / .10);padding-top:env(safe-area-inset-top,0px)}
+.site-header{position:sticky;top:0;z-index:20;background:var(--header);color:var(--header-ink);border-bottom:1px solid #18489A;box-shadow:0 2px 10px rgb(20 50 120 / .18);padding-top:env(safe-area-inset-top,0px)}
 .site-header .in{max-width:1320px;margin:0 auto;padding:10px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px}
 .brand{display:flex;align-items:center;gap:10px}
 .brand svg{width:34px;height:34px;flex:none}
 .brand .t{font-family:var(--font-display);font-weight:700;font-size:18px;line-height:1.2}
-.brand .s{font-size:11px;opacity:.75}
-.status{font-size:12px;color:var(--beige-ink);background:rgb(255 255 255 / .55);padding:3px 10px;border-radius:99px;display:flex;align-items:center;gap:6px}
-.status::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--good)}
-.status.busy::before{background:#D79A1C}
+.brand .s{font-size:11px;opacity:.85}
+.status{font-size:12px;color:#fff;background:rgb(255 255 255 / .16);padding:3px 10px;border-radius:99px;display:flex;align-items:center;gap:6px}
+.status::before{content:"";width:8px;height:8px;border-radius:50%;background:#7EE2A8}
+.status.busy::before{background:#FFD36B}
 .status.err{background:#FBE3E3;color:var(--bad)}
 .status.err::before{background:var(--bad)}
 .status:empty{display:none}
@@ -138,7 +138,7 @@ main{display:flex;flex-direction:column;gap:22px;min-width:0}
 .title-in{font-family:var(--font-display);font-size:22px;font-weight:700;padding:8px 12px;width:100%}
 .info-grid{display:grid;grid-template-columns:minmax(200px,1fr) minmax(200px,2fr);gap:12px}
 .info-grid input{width:100%}
-.edit-hint{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#FFF7DC;border:1px dashed var(--input-line);border-radius:10px;padding:9px 14px;font-size:13px}
+.edit-hint{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#EAF2FE;border:1px dashed var(--input-line);border-radius:10px;padding:9px 14px;font-size:13px}
 .edit-hint .sw{display:inline-block;width:46px;height:22px;border-radius:6px;background:var(--input-bg);border:1.5px solid var(--input-line);flex:none}
 .actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .meta{font-size:12px;color:var(--muted)}
@@ -284,7 +284,7 @@ table.in td input.name{width:100%;min-width:140px}
 
 <header class="site-header"><div class="in">
   <div class="brand">
-    <svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="9" cy="10" r="6" fill="#B08A5E"/><circle cx="31" cy="10" r="6" fill="#B08A5E"/><circle cx="9" cy="10" r="3" fill="#F0DFC8"/><circle cx="31" cy="10" r="3" fill="#F0DFC8"/><circle cx="20" cy="22" r="15" fill="#B08A5E"/><circle cx="20" cy="26" r="6.5" fill="#F0DFC8"/><circle cx="14.5" cy="19" r="1.9" fill="#5A4430"/><circle cx="25.5" cy="19" r="1.9" fill="#5A4430"/><ellipse cx="20" cy="24.5" rx="2.2" ry="1.6" fill="#5A4430"/></svg>
+    <svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="9" cy="10" r="6" fill="#fff"/><circle cx="31" cy="10" r="6" fill="#fff"/><circle cx="9" cy="10" r="3" fill="#BCD3F5"/><circle cx="31" cy="10" r="3" fill="#BCD3F5"/><circle cx="20" cy="22" r="15" fill="#fff"/><circle cx="20" cy="26" r="6.5" fill="#BCD3F5"/><circle cx="14.5" cy="19" r="1.9" fill="#16306B"/><circle cx="25.5" cy="19" r="1.9" fill="#16306B"/><ellipse cx="20" cy="24.5" rx="2.2" ry="1.6" fill="#16306B"/></svg>
     <div><div class="t">ぬいぐるみ原価計算</div><div class="s">キャラクターごとに、日本販売・中国販売の原価と利益を試算</div></div>
   </div>
   <span id="saveStatus" class="status"></span>
