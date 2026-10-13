@@ -1,10 +1,10 @@
 // Firebase コンソール →「プロジェクトの設定」→「マイアプリ（ウェブ）」に表示される値を貼り付けてください。
 // この値は公開されても問題のない識別子です（データの保護は firestore.rules と共有リンクの合言葉で行います）。
 window.FIREBASE_CONFIG = {
-  apiKey: "",
-  authDomain: "",
-  projectId: "",
-  storageBucket: "",
-  messagingSenderId: "",
-  appId: ""
+  apiKey: "AIzaSyCBDkjTeO_M2fmFHV32grMWA_2JJLO_R7Q",
+  authDomain: "inclue-pricing.firebaseapp.com",
+  projectId: "inclue-pricing",
+  storageBucket: "inclue-pricing.firebasestorage.app",
+  messagingSenderId: "949838174596",
+  appId: "1:949838174596:web:113b65a7813274a5ade5d1"
 };
