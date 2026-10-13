@@ -119,6 +119,7 @@ input:disabled,select:disabled{background:var(--sunken)}
 .plist td:not(.num) .pl{justify-content:flex-start}
 .plist .pl small{font-size:11px;color:var(--muted)}
 .plist .sub{display:block;font-size:11px;color:var(--muted);font-weight:400}
+.themetag{font-size:12px;font-weight:700;color:var(--c-sales);background:var(--c-sales-soft);padding:2px 10px;border-radius:99px;line-height:1.6}
 .chartag{font-size:12px;font-weight:700;color:var(--brand);background:var(--brand-soft);padding:2px 10px;border-radius:99px}
 .est-list .nm{font-weight:700;line-height:1.45;overflow-wrap:anywhere}
 .est-list .dt{font-size:11px;color:var(--muted)}
@@ -294,6 +295,8 @@ table.in td input.name{width:100%;min-width:140px}
 <div class="layout">
   <aside class="side">
     <div class="side-box">
+      <div class="side-title">テーマ</div>
+      <div class="chips" id="themeChips"></div>
       <div class="side-title">キャラクター</div>
       <div class="chips" id="charChips"></div>
       <button id="btnList" class="listbtn" data-act="list">商品一覧を見る</button>
@@ -323,6 +326,7 @@ let localOnly=true;
 let kpiObs=null;
 let view=recall("view")==="list"?"list":"edit";
 let charFilter=recall("charFilter")||"";
+let themeFilter=recall("themeFilter")||"";
 
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -336,13 +340,15 @@ const cls=v=>v==null||!isFinite(v)?"":(v<0?"neg":"pos");
 const today=()=>new Date().toISOString().slice(0,10);
 const fmtDate=s=>{if(!s)return"";const d=new Date(s);if(isNaN(d))return"";return `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`};
 const charOf=d=>(d&&String(d.character||"").trim())||NOCHAR;
-// list label: 【テーマ】商品名（サイズ）
-const titleOf=d=>{const t=String(d?.theme||"").trim(),nm=String(d?.name||"").trim(),h=d?.size?.height;
-  return `${t?`【${t}】`:""}${nm||"商品名未入力"}${h!=null&&h!==""&&isFinite(parseFloat(h))?`（${parseFloat(h)}cm）`:""}`};
+// list label: 商品名（サイズ）; the theme is a category, not part of the name
+const titleOf=d=>{const nm=String(d?.name||"").trim(),h=d?.size?.height;
+  return `${nm||"商品名未入力"}${h!=null&&h!==""&&isFinite(parseFloat(h))?`（${parseFloat(h)}cm）`:""}`};
+const NOTHEME="テーマなし";
+const themeOf=d=>(d&&String(d.theme||"").trim())||NOTHEME;
 
 function newDoc(fx){
   return {
-    theme:"",name:"",character:charFilter&&charFilter!==NOCHAR?charFilter:"",memo:"",
+    theme:themeFilter&&themeFilter!==NOTHEME?themeFilter:"",name:"",character:charFilter&&charFilter!==NOCHAR?charFilter:"",memo:"",
     fx:{CNY:fx.CNY,USD:fx.USD,auto:true},
     lossRate:5,dutyRate:0,importTaxRate:10,
     qty:{jpOff:null,jpOn:null,cnOff:null,cnOn:null},
@@ -532,7 +538,7 @@ function summarize(data){
 function renderList(){
   const m=$("#main");
   const items=list.length?list:(doc&&!localOnly?[{id:curId,data:doc}]:localOnly&&doc?[{id:curId,data:doc}]:[]);
-  const rows=items.filter(e=>!charFilter||charOf(e.id===curId&&doc?doc:e.data)===charFilter)
+  const rows=items.filter(e=>{const d=e.id===curId&&doc?doc:e.data;return (!charFilter||charOf(d)===charFilter)&&(!themeFilter||themeOf(d)===themeFilter)})
     .map(e=>({id:e.id,...summarize(e.id===curId&&doc?doc:e.data)}))
     .sort((a,b)=>charOf(a.d).localeCompare(charOf(b.d),"ja")||titleOf(a.d).localeCompare(titleOf(b.d),"ja"));
   const rc=v=>v==null?"":`<span class="rate ${rateCls(v)}">${pct(v)}</span>`;
@@ -545,17 +551,18 @@ function renderList(){
     <td class="num">${stack(x,p=>`<div class="pl ${cls(p.direct?.profit)}"><b>${p.direct?yen(p.direct.profit):""}</b></div>`)}</td>`;
   m.innerHTML=`
   <section class="listhead">
-    <div><h2>商品一覧</h2><p class="small muted">${charFilter?`キャラクター「${esc(charFilter)}」の商品`:"すべての商品"}・${rows.length}件。行をクリックすると見積もりを開きます。</p></div>
+    <div><h2>商品一覧</h2><p class="small muted">${[themeFilter&&`テーマ「${esc(themeFilter)}」`,charFilter&&`キャラクター「${esc(charFilter)}」`].filter(Boolean).join("・")||"すべて"}の商品・${rows.length}件。行をクリックすると見積もりを開きます。</p></div>
   </section>
   ${rows.length?`<div class="tbl-wrap listwrap"><table class="plist">
     <thead>
-      <tr><th rowspan="2">商品名</th><th rowspan="2">キャラクター</th><th rowspan="2" class="r">サイズ</th><th rowspan="2" class="r">製造数<span class="sub">日本 / 中国</span></th>
+      <tr><th rowspan="2">商品名</th><th rowspan="2">テーマ</th><th rowspan="2">キャラクター</th><th rowspan="2" class="r">サイズ</th><th rowspan="2" class="r">製造数<span class="sub">日本 / 中国</span></th>
         <th colspan="4" class="mh jp">日本販売</th><th colspan="4" class="mh cn">中国販売</th></tr>
       <tr><th class="r jp">原価/個</th><th class="r jp">販売価格</th><th class="jp">原価率</th><th class="r jp">利益/個</th>
         <th class="r cn">原価/個</th><th class="r cn">販売価格</th><th class="cn">原価率</th><th class="r cn">利益/個</th></tr>
     </thead>
     <tbody>${rows.map(r=>`<tr data-open="${esc(r.id)}" tabindex="0">
       <td><b>${esc(titleOf(r.d))}</b></td>
+      <td>${r.d.theme&&String(r.d.theme).trim()?`<span class="themetag">${esc(String(r.d.theme).trim())}</span>`:'<span class="muted">—</span>'}</td>
       <td><span class="chartag">${esc(charOf(r.d))}</span></td>
       <td class="num">${has(r.d.size.height)?esc(r.d.size.height)+"cm":"—"}</td>
       <td class="num">${r.jp.qty.toLocaleString()} / ${r.cn.qty.toLocaleString()}</td>
@@ -786,14 +793,19 @@ function updateOutputs(){
 
 function renderSide(){
   const items=list.length?list:(doc?[{id:curId,data:doc}]:[]);
-  const view=items.map(e=>({id:e.id,d:e.id===curId&&doc?doc:e.data}));
+  const all=items.map(e=>({id:e.id,d:e.id===curId&&doc?doc:e.data}));
+  const tcounts={};for(const v of all){const t=themeOf(v.d);tcounts[t]=(tcounts[t]||0)+1}
+  const themes=Object.keys(tcounts).sort((a,b)=>a===NOTHEME?1:b===NOTHEME?-1:a.localeCompare(b,"ja"));
+  if(themeFilter&&!tcounts[themeFilter])themeFilter="";
+  $("#themeChips").innerHTML=`<button class="chip" data-tfilter="" aria-pressed="${!themeFilter}">すべて<span class="cnt">${all.length}</span></button>`+themes.map(t=>`<button class="chip" data-tfilter="${esc(t)}" aria-pressed="${themeFilter===t}">${esc(t)}<span class="cnt">${tcounts[t]}</span></button>`).join("");
+  const view=all.filter(v=>!themeFilter||themeOf(v.d)===themeFilter);
   const counts={};for(const v of view){const c=charOf(v.d);counts[c]=(counts[c]||0)+1}
   const chars=Object.keys(counts).sort((a,b)=>a===NOCHAR?1:b===NOCHAR?-1:a.localeCompare(b,"ja"));
   if(charFilter&&!counts[charFilter])charFilter="";
   $("#charChips").innerHTML=`<button class="chip" data-filter="" aria-pressed="${!charFilter}">すべて<span class="cnt">${view.length}</span></button>`+chars.map(c=>`<button class="chip" data-filter="${esc(c)}" aria-pressed="${charFilter===c}">${esc(c)}<span class="cnt">${counts[c]}</span></button>`).join("");
   const shown=chars.filter(c=>!charFilter||c===charFilter);
   $("#estGroups").innerHTML=view.length?shown.map(c=>`<div><div class="grp-h">${esc(c)}</div><ul class="est-list">${view.filter(v=>charOf(v.d)===c).map(v=>`<li><button data-open="${esc(v.id)}"${v.id===curId?' aria-current="true"':""}><span class="nm">${esc(titleOf(v.d))}</span><span class="dt">${v.d.updatedAt?"更新 "+fmtDate(v.d.updatedAt):"未保存"}</span></button></li>`).join("")}</ul></div>`).join(""):`<p class="small muted">まだありません</p>`;
-  $("#themeOptions").innerHTML=[...new Set(view.map(v=>String(v.d.theme||"").trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"ja")).map(t=>`<option value="${esc(t)}"></option>`).join("");
+  $("#themeOptions").innerHTML=[...new Set(all.map(v=>String(v.d.theme||"").trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"ja")).map(t=>`<option value="${esc(t)}"></option>`).join("");
   $("#charOptions").innerHTML=chars.filter(c=>c!==NOCHAR).map(c=>`<option value="${esc(c)}"></option>`).join("");
   $("#btnNew").disabled=!canWrite;
 }
@@ -823,6 +835,8 @@ document.addEventListener("input",e=>{
 });
 document.addEventListener("change",e=>{if(e.target.dataset?.path==="character")renderSide()});
 document.addEventListener("click",async e=>{
+  const tf=e.target.closest("[data-tfilter]");
+  if(tf){themeFilter=tf.dataset.tfilter;remember("themeFilter",themeFilter);if(view==="list")render();else renderSide();return}
   const f=e.target.closest("[data-filter]");
   if(f){charFilter=f.dataset.filter;remember("charFilter",charFilter);if(view==="list")render();else renderSide();return}
   const o=e.target.closest("[data-open]");
