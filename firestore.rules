@@ -1,0 +1,16 @@
+rules_version = '2';
+
+// Data lives under spaces/{key}/... where {key} is the secret part of the shared link (#<key>).
+// Anyone holding the link can read and edit that space. No rule allows listing /spaces itself,
+// so keys cannot be discovered from the database.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /spaces/{key}/{collection}/{doc} {
+      function inSpace() {
+        return key.size() >= 32 && collection in ['estimates', 'settings'];
+      }
+      allow read, delete: if inSpace();
+      allow create, update: if inSpace() && request.resource.data.size() < 100;
+    }
+  }
+}

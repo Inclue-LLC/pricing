@@ -1,0 +1,954 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="referrer" content="no-referrer">
+<title>ぬいぐるみ原価計算</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&family=Zen+Maru+Gothic:wght@500;700&display=swap">
+<style>
+body{margin:0}img{max-width:100%}
+/* Light only (by request), beige brand. Each input step has its own color, reused in the nav badges and the cost bar.
+   Layout: web-app shell — beige header, left sidebar (estimates grouped by character), main column with the result summary first, numbered input steps below */
+:root{
+  --bg:#FAF7F2; --surface:#FFFFFF; --sunken:#F4F1EC; --ink:#1F2230; --muted:#625F6B; --line:#E3DDD3;
+  --brand:#8C6B47; --brand-soft:#F3EADD; --brand-ink:#FFFFFF; --beige:#E6D5BE; --beige-ink:#3B2E22;
+  --jp:#2E4A97; --jp-soft:#EAEFFB; --cn:#1C826A; --cn-soft:#E4F4EF;
+  --good:#1C7A4C; --bad:#B0242F;
+  --shadow:0 1px 2px rgb(60 40 20 / .06),0 4px 14px rgb(60 40 20 / .05);
+  --font-display:"Zen Maru Gothic","Hiragino Maru Gothic ProN","Yu Gothic",sans-serif;
+  --font-body:"Zen Kaku Gothic New","Hiragino Sans","Yu Gothic","Meiryo",sans-serif;
+  --r:12px;
+  --input-bg:#FFFBEC; --input-line:#D6C6A8;
+  --c-basic:#7A6650; --c-basic-soft:#F2ECE3;
+  --c-qty:#0B8793;   --c-qty-soft:#E1F4F5;
+  --c-mfg:#E0761A;   --c-mfg-soft:#FDF0E3;
+  --c-log:#2A84CF;   --c-log-soft:#E5F1FB;
+  --c-duty:#D04848;  --c-duty-soft:#FBE8E8;
+  --c-tax:#A8479B;   --c-tax-soft:#F8E9F5;
+  --c-fee:#8C8577;
+  --c-sales:#C2416D; --c-sales-soft:#FCE9F0;
+  --ch-direct:#7A4CC8; --ch-consign:#C08F00; --ch-online:#2A84CF;
+  color-scheme:light;
+}
+.cat-basic{--c:var(--c-basic);--c-soft:var(--c-basic-soft)}
+.cat-qty{--c:var(--c-qty);--c-soft:var(--c-qty-soft)}
+.cat-mfg{--c:var(--c-mfg);--c-soft:var(--c-mfg-soft)}
+.cat-log{--c:var(--c-log);--c-soft:var(--c-log-soft)}
+.cat-duty{--c:var(--c-duty);--c-soft:var(--c-duty-soft)}
+.cat-sales{--c:var(--c-sales);--c-soft:var(--c-sales-soft)}
+.cat-brand{--c:var(--brand);--c-soft:var(--brand-soft)}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html{scroll-behavior:smooth;scroll-padding-top:70px}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:14px;line-height:1.65}
+h1,h2,h3{font-family:var(--font-display);margin:0;text-wrap:balance}
+p{margin:0}
+.muted{color:var(--muted)}
+.small{font-size:12px}
+.num{font-variant-numeric:tabular-nums}
+button{font:inherit;cursor:pointer;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:7px 14px;transition:border-color .15s,background .15s}
+button:hover{border-color:var(--muted)}
+button.primary{background:var(--brand);border-color:var(--brand);color:var(--brand-ink);font-weight:700}
+button.primary:hover{filter:brightness(1.06)}
+button.ghost{border-color:transparent;background:transparent;color:var(--muted);padding:4px 8px}
+button.ghost:hover{color:var(--bad);background:var(--sunken)}
+button.danger{color:var(--bad)}
+button.danger:hover{border-color:var(--bad)}
+button.add{border-style:dashed;align-self:flex-start;color:var(--c,var(--muted));border-color:var(--c,var(--line))}
+button.add:hover{background:var(--c-soft,var(--sunken))}
+button:focus-visible,input:focus-visible,select:focus-visible,a:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+button:disabled{opacity:.45;cursor:not-allowed}
+/* editable fields get a warm fill and visible border so they read as "type here"; computed values stay plain text */
+input,select{font:inherit;color:var(--ink);background:var(--input-bg);border:1.5px solid var(--input-line);border-radius:7px;padding:6px 9px;min-width:0}
+input:hover,select:hover{border-color:var(--brand)}
+input:focus,select:focus{outline:none;border-color:var(--brand);background:#fff;box-shadow:0 0 0 3px rgb(140 107 71 / .22)}
+input::placeholder{color:#A99F8C}
+input[type=checkbox]{width:17px;height:17px;accent-color:var(--brand)}
+input[type=number]{text-align:right;font-variant-numeric:tabular-nums}
+input:disabled,select:disabled{background:var(--sunken)}
+
+/* site header */
+.site-header{position:sticky;top:0;z-index:20;background:var(--beige);color:var(--beige-ink);border-bottom:1px solid #D4BFA2;box-shadow:0 2px 8px rgb(90 60 30 / .10);padding-top:env(safe-area-inset-top,0px)}
+.site-header .in{max-width:1320px;margin:0 auto;padding:10px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.brand{display:flex;align-items:center;gap:10px}
+.brand svg{width:34px;height:34px;flex:none}
+.brand .t{font-family:var(--font-display);font-weight:700;font-size:18px;line-height:1.2}
+.brand .s{font-size:11px;opacity:.75}
+.status{font-size:12px;color:var(--beige-ink);background:rgb(255 255 255 / .55);padding:3px 10px;border-radius:99px;display:flex;align-items:center;gap:6px}
+.status::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--good)}
+.status.busy::before{background:#D79A1C}
+.status.err{background:#FBE3E3;color:var(--bad)}
+.status.err::before{background:var(--bad)}
+.status:empty{display:none}
+
+/* shell */
+.layout{max-width:1320px;margin:0 auto;padding-inline:20px;padding-block:24px 80px;display:grid;grid-template-columns:260px minmax(0,1fr);gap:24px;align-items:start}
+.side{position:sticky;top:84px;display:flex;flex-direction:column;gap:18px;max-height:calc(100vh - 100px);overflow:auto}
+.side-box{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px;display:flex;flex-direction:column;gap:10px}
+.side-title{font-size:11px;font-weight:700;letter-spacing:.08em;color:var(--muted)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-size:12px;padding:3px 10px;border-radius:99px;border:1px solid var(--line);background:var(--surface);color:var(--ink)}
+.chip[aria-pressed="true"]{background:var(--brand);border-color:var(--brand);color:#fff}
+.chip .cnt{opacity:.7;margin-left:4px}
+.est-groups{display:flex;flex-direction:column;gap:10px;max-height:380px;overflow:auto}
+.grp-h{font-size:12px;font-weight:700;color:var(--brand);display:flex;align-items:center;gap:6px;padding:0 4px}
+.grp-h::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--brand)}
+.est-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+.est-list button{width:100%;text-align:left;border:1px solid transparent;background:transparent;padding:7px 10px;display:flex;flex-direction:column;gap:0}
+.est-list button:hover{background:var(--sunken)}
+.est-list button[aria-current="true"]{background:var(--brand-soft);border-color:var(--brand)}
+.listbtn{font-weight:700;color:var(--brand);border-color:var(--brand)}
+.listbtn[aria-pressed="true"]{background:var(--brand-soft)}
+.listhead h2{font-size:22px}
+.plist{border-collapse:collapse;width:100%;font-size:13px;background:var(--surface)}
+.plist th,.plist td{padding:9px 10px;border-bottom:1px solid var(--line);white-space:nowrap;text-align:left;vertical-align:middle}
+.plist thead th{background:var(--sunken);font-size:12px;color:var(--muted);font-weight:700}
+.plist thead th.mh{text-align:center;color:#fff}
+.plist thead th.mh.jp{background:var(--jp);color:#fff}.plist thead th.mh.cn{background:var(--cn);color:#fff}
+.plist thead th.jp{background:var(--jp-soft);color:var(--jp)}.plist thead th.cn{background:var(--cn-soft);color:var(--cn)}
+.plist td.num,.plist th.r{text-align:right}
+.plist tbody tr{cursor:pointer}
+.plist tbody tr:hover td{background:var(--brand-soft)}
+.plist tbody td{vertical-align:top;line-height:26px}
+.plist .chartag{line-height:1.6}
+.plist .pl{height:26px;display:flex;align-items:center;justify-content:flex-end;gap:6px}
+.plist td:not(.num) .pl{justify-content:flex-start}
+.plist .pl small{font-size:11px;color:var(--muted)}
+.plist .sub{display:block;font-size:11px;color:var(--muted);font-weight:400}
+.chartag{font-size:12px;font-weight:700;color:var(--brand);background:var(--brand-soft);padding:2px 10px;border-radius:99px}
+.est-list .nm{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.est-list .dt{font-size:11px;color:var(--muted)}
+.steps{display:flex;flex-direction:column;gap:2px}
+.steps a{display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:8px;color:var(--ink);text-decoration:none;font-size:13px}
+.steps a .b{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:700;background:var(--c,var(--sunken));color:#fff;flex:none}
+.steps a:hover{background:var(--c-soft,var(--sunken))}
+
+main{display:flex;flex-direction:column;gap:22px;min-width:0}
+.notice{background:var(--brand-soft);border-radius:var(--r);padding:10px 14px;font-size:13px}
+
+/* title block */
+.titlerow{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;justify-content:space-between}
+.infocard{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:16px 20px;display:flex;flex-direction:column;gap:12px}
+.infocard .grow{flex:1;min-width:240px}
+.infocard label{font-size:12px;font-weight:700;color:var(--brand)}
+.title-in{font-family:var(--font-display);font-size:22px;font-weight:700;padding:8px 12px;width:100%}
+.info-grid{display:grid;grid-template-columns:minmax(200px,1fr) minmax(200px,2fr);gap:12px}
+.info-grid input{width:100%}
+.edit-hint{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#FFF7DC;border:1px dashed var(--input-line);border-radius:10px;padding:9px 14px;font-size:13px}
+.edit-hint .sw{display:inline-block;width:46px;height:22px;border-radius:6px;background:var(--input-bg);border:1.5px solid var(--input-line);flex:none}
+.actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.meta{font-size:12px;color:var(--muted)}
+
+/* summary */
+.summary-h{display:flex;align-items:baseline;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.markets-sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:16px;align-items:start}
+.msum{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);overflow:hidden;display:flex;flex-direction:column;min-width:0}
+.msum-h{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 16px;color:#fff}
+.msum.jp .msum-h{background:var(--jp)}
+.msum.cn .msum-h{background:var(--cn)}
+.msum-h h3{font-size:16px}
+.msum-h .q{font-size:12px;opacity:.9}
+.msum-b{padding:14px 16px 16px;display:flex;flex-direction:column;gap:12px;overflow-x:auto}
+.figs{display:grid;grid-template-columns:1fr;gap:10px}
+.fig{border-radius:9px;padding:8px 12px;background:var(--sunken);display:flex;flex-direction:column}
+.msum.jp .fig.cost{background:var(--jp-soft)}
+.msum.cn .fig.cost{background:var(--cn-soft)}
+.fig .lb{font-size:11px;font-weight:700;color:var(--muted)}
+.fig .v{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.3}
+.fig .u{font-size:11px;color:var(--muted)}
+.bar{display:flex;height:10px;border-radius:99px;overflow:hidden;background:var(--surface);margin-top:6px}
+.bar span{display:block;height:100%}
+.bar .mfg{background:var(--c-mfg)}.bar .log{background:var(--c-log)}.bar .duty{background:var(--c-duty)}.bar .tax{background:var(--c-tax)}.bar .fee{background:var(--c-fee)}
+.cat-tax{--c:var(--c-tax);--c-soft:var(--c-tax-soft)}.cat-fee{--c:var(--c-fee);--c-soft:var(--sunken)}
+.legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--muted)}
+.dot{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px;background:var(--c)}
+.chtbl{width:100%;border-collapse:collapse;font-size:13px}
+.chtbl th,.chtbl td{padding:7px 6px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+.chtbl th:first-child,.chtbl td:first-child{text-align:left}
+.chtbl thead th{font-size:11px;color:var(--muted);font-weight:700}
+.chtbl tbody tr:last-child td{border-bottom:none}
+.chname{display:flex;align-items:center;gap:8px;font-weight:700}
+.chname::before{content:"";width:4px;height:18px;border-radius:2px;background:var(--chc)}
+.chname small{font-weight:400;color:var(--muted)}
+.ch-direct{--chc:var(--ch-direct)}.ch-consign{--chc:var(--ch-consign)}.ch-online{--chc:var(--ch-online)}
+.rate{display:inline-block;min-width:56px;padding:1px 8px;border-radius:99px;font-weight:700;font-size:12px;text-align:center}
+.rate.ok{background:#E3F4EA;color:var(--good)}
+.rate.mid{background:#FBF2DA;color:#8A6200}
+.rate.hi{background:#FBE3E3;color:var(--bad)}
+.pos{color:var(--good)}
+.neg{color:var(--bad)}
+.lotline{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--muted);border-top:1px dashed var(--line);padding-top:8px}
+.lotline b{color:var(--ink);font-variant-numeric:tabular-nums}
+.pblock{border:1px solid var(--line);border-radius:10px;padding:10px 12px 4px;display:flex;flex-direction:column;gap:4px}
+.pblock-h{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;padding-bottom:6px;border-bottom:2px solid var(--c-sales-soft)}
+.pname{font-size:12px;font-weight:700;color:var(--c-sales);background:var(--c-sales-soft);padding:1px 10px;border-radius:99px}
+.pval{font-size:18px;font-weight:700;font-variant-numeric:tabular-nums}
+.hint{font-size:12px;color:var(--muted);background:var(--sunken);border-radius:8px;padding:8px 10px}
+
+.mini{position:sticky;top:64px;z-index:10;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:8px 14px;display:flex;gap:6px 18px;flex-wrap:wrap;align-items:center;font-size:13px}
+.mini .p{display:flex;gap:6px;align-items:baseline}
+.mini b{font-variant-numeric:tabular-nums}
+
+/* step cards */
+.card{background:var(--surface);border:1px solid var(--line);border-top:4px solid var(--c,var(--line));border-radius:var(--r);box-shadow:var(--shadow);padding:20px;overflow:hidden;display:flex;flex-direction:column;gap:14px;min-width:0}
+.card-h{display:flex;gap:12px;align-items:flex-start;margin:-20px -20px 0;padding:14px 20px;background:var(--c-soft,var(--sunken));border-bottom:1px solid var(--line)}
+.card-h .b{width:30px;height:30px;border-radius:50%;background:var(--c,var(--brand));color:#fff;display:grid;place-items:center;font-weight:700;font-family:var(--font-display);flex:none}
+.card-h h2{font-size:18px;line-height:1.4;color:var(--c,var(--ink))}
+.card-h p{font-size:12.5px;color:var(--ink);opacity:.75}
+.fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px}
+.field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.field label,.field .lbl{font-size:12px;font-weight:500;color:var(--muted)}
+.field .row{display:flex;gap:6px;align-items:center}
+.field .row input{flex:1;width:100%}
+.unit{font-size:12px;color:var(--muted);white-space:nowrap}
+.fxbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:var(--sunken);border-radius:9px;padding:10px 12px;font-size:12.5px}
+.qtybox{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px;align-items:start}
+.qtybox .field{border-radius:10px;padding:12px;border:1px solid var(--line)}
+.qtybox .jp{background:var(--jp-soft)}
+.qtybox .cn{background:var(--cn-soft)}
+.qtybox .tot{background:var(--sunken)}
+.qtybox .size{background:var(--c-log-soft);border-color:var(--c-log)}
+.qtybox .size label{color:var(--c-log);font-weight:700}
+.qtybox .mkt{gap:8px}
+.qrow{display:grid;grid-template-columns:auto 1fr;align-items:center;gap:8px}
+.qrow label{white-space:nowrap}
+.qsub{font-size:12px;color:var(--muted);text-align:right}
+.qsub b{color:var(--ink);font-size:14px;font-variant-numeric:tabular-nums}
+.qtybox .big{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums}
+
+.tbl-wrap{overflow-x:auto;min-width:0;border:1px solid var(--line);border-radius:10px}
+table.in{border-collapse:collapse;width:100%}
+table.in th,table.in td{padding:7px 8px;text-align:left;vertical-align:middle;border-bottom:1px solid var(--line)}
+table.in thead th{background:var(--c-soft,var(--sunken));font-size:12px;font-weight:700;color:var(--muted);white-space:nowrap}
+table.in tbody tr:last-child td{border-bottom:none}
+table.in tfoot td{color:var(--c,var(--ink));background:var(--c-soft,var(--sunken));font-weight:700;border-top:1px solid var(--line)}
+table.in td input[type=number]{width:120px}
+table.in td input.name{width:100%;min-width:140px}
+.r{text-align:right}
+
+.tag{display:inline-block;font-size:11px;font-weight:700;padding:1px 9px;border-radius:99px;white-space:nowrap}
+.tag.jp{color:var(--jp);background:var(--jp-soft)}
+.tag.cn{color:var(--cn);background:var(--cn-soft)}
+
+.markets{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
+.market{border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:12px;min-width:0;border:1px solid var(--line)}
+.market.jp{border-top:4px solid var(--jp)}
+.market.cn{border-top:4px solid var(--cn)}
+.market h3{font-size:15px}
+.fees{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px}
+.crates{display:flex;flex-direction:column;gap:6px}
+.crate{display:flex;align-items:center;gap:8px}
+.crate .shop{flex:1;min-width:120px;max-width:220px}
+.subhead{font-size:12px;font-weight:700;color:var(--muted);display:flex;align-items:center;gap:6px}
+.subhead::before{content:"";width:4px;height:14px;border-radius:2px;background:var(--chc,var(--muted))}
+
+.intl{border:1px solid var(--c-log);border-radius:10px;background:var(--c-log-soft);padding:14px;display:flex;flex-direction:column;gap:12px}
+.intl .field{background:transparent}
+.intl-h{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;justify-content:space-between}
+.sw{display:flex;align-items:center;gap:8px;font-weight:700;color:var(--c-log);cursor:pointer}
+.sw input{width:18px;height:18px;accent-color:var(--c-log)}
+.intl-res{background:var(--surface);border-radius:9px;padding:10px 14px;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px 16px}
+.intl-res div{display:flex;flex-direction:column}
+.intl-res .lb{font-size:11px;color:var(--muted);font-weight:700}
+.intl-res .v{font-weight:700;font-variant-numeric:tabular-nums}
+.intl-res .v.big{font-size:18px;color:var(--c-log)}
+.intl-res .full{grid-column:1/-1;font-size:12px;color:var(--muted)}
+.autobadge{font-size:11px;font-weight:700;color:#fff;background:var(--c-log);border-radius:99px;padding:1px 8px}
+.autorow td{background:var(--c-log-soft)}
+.impbox{border:1px solid var(--c-tax);border-radius:10px;background:var(--c-tax-soft);padding:14px;display:flex;flex-direction:column;gap:12px}
+.impbox:empty{display:none}
+.autonote{margin-top:3px;font-size:11px;white-space:nowrap}
+.linkbtn{border:none;background:none;padding:0;color:var(--c-log);font-size:11px;text-decoration:underline}
+.empty{padding:56px 20px;text-align:center;align-items:center}
+.confirm{display:inline-flex;gap:6px;align-items:center;font-size:12px;color:var(--bad)}
+
+@media (max-width:900px){
+  .layout{grid-template-columns:1fr;padding-inline:16px}
+  .side{position:static;max-height:none}
+  .steps-box{display:none}
+  .est-groups{max-height:220px}
+  .mini{top:58px}
+}
+@media (max-width:520px){.title-in{font-size:19px}.info-grid{grid-template-columns:1fr}.brand .s{display:none}.mini{position:static}.markets-sum{grid-template-columns:1fr}}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important}}
+</style>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+</head>
+<body>
+
+<header class="site-header"><div class="in">
+  <div class="brand">
+    <svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="9" cy="10" r="6" fill="#B08A5E"/><circle cx="31" cy="10" r="6" fill="#B08A5E"/><circle cx="9" cy="10" r="3" fill="#F0DFC8"/><circle cx="31" cy="10" r="3" fill="#F0DFC8"/><circle cx="20" cy="22" r="15" fill="#B08A5E"/><circle cx="20" cy="26" r="6.5" fill="#F0DFC8"/><circle cx="14.5" cy="19" r="1.9" fill="#5A4430"/><circle cx="25.5" cy="19" r="1.9" fill="#5A4430"/><ellipse cx="20" cy="24.5" rx="2.2" ry="1.6" fill="#5A4430"/></svg>
+    <div><div class="t">ぬいぐるみ原価計算</div><div class="s">キャラクターごとに、日本販売・中国販売の原価と利益を試算</div></div>
+  </div>
+  <span id="saveStatus" class="status"></span>
+</div></header>
+
+<div class="layout">
+  <aside class="side">
+    <div class="side-box">
+      <div class="side-title">キャラクター</div>
+      <div class="chips" id="charChips"></div>
+      <button id="btnList" class="listbtn" data-act="list">商品一覧を見る</button>
+      <button id="btnNew" class="primary">＋ 新規作成</button>
+      <div class="est-groups" id="estGroups"></div>
+    </div>
+  </aside>
+  <main id="main"></main>
+</div>
+<datalist id="charOptions"></datalist>
+
+<script>
+(function(){
+"use strict";
+const CURS=["JPY","CNY","USD"];
+const CUR_LABEL={JPY:"円",CNY:"元",USD:"ドル"};
+const DEFAULT_FX={CNY:21.8,USD:156,updatedAt:"2026-10-13",note:"参考値（要確認）"};
+const NOCHAR="未分類";
+
+let db=null,myId=null,canWrite=true;
+let list=[];
+let curId=null,doc=null;
+let dirty=false,saving=false,saveTimer=null,lastSavedAt=0,pendingDelete=false;
+let commonFx={...DEFAULT_FX};
+let localOnly=true;
+let kpiObs=null;
+let view=recall("view")==="list"?"list":"edit";
+let charFilter=recall("charFilter")||"";
+
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const uid=()=>"e"+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+const n=v=>{const x=parseFloat(v);return isFinite(x)?x:0};
+const has=v=>v!=null&&v!==""&&isFinite(parseFloat(v));
+const yen=(v,d=1)=>v==null||!isFinite(v)?"—":"¥"+v.toLocaleString("ja-JP",{minimumFractionDigits:d,maximumFractionDigits:d});
+const yen0=v=>yen(v,0);
+const pct=v=>v==null||!isFinite(v)?"—":(v*100).toFixed(1)+"%";
+const cls=v=>v==null||!isFinite(v)?"":(v<0?"neg":"pos");
+const today=()=>new Date().toISOString().slice(0,10);
+const fmtDate=s=>{if(!s)return"";const d=new Date(s);if(isNaN(d))return"";return `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`};
+const charOf=d=>(d&&String(d.character||"").trim())||NOCHAR;
+
+function newDoc(fx){
+  return {
+    name:"",character:charFilter&&charFilter!==NOCHAR?charFilter:"",memo:"",
+    fx:{CNY:fx.CNY,USD:fx.USD},
+    lossRate:5,dutyRate:0,importTaxRate:10,
+    qty:{jpOff:200,jpOn:100,cnOff:100,cnOn:100},
+    size:{height:null,weightG:null,ratioW:0.7,ratioD:0.5,compress:0},
+    intl:{service:"m_cn_eco",fuel:41.5,shipments:1,customs:0},
+    mfg:[
+      {name:"サンプル製造費用",cur:"CNY",basis:"lot",amount:null},
+      {name:"量産費用",cur:"USD",basis:"piece",amount:null},
+      {name:"タグ製造費用",cur:"CNY",basis:"lot",amount:null},
+      {name:"包装費用",cur:"CNY",basis:"piece",amount:null}
+    ],
+    logistics:[
+      {name:"国際送料",cur:"CNY",basis:"lot",target:"jp",cif:true,amount:null,intlRow:true,auto:true},
+      {name:"日本国内配送",cur:"JPY",basis:"lot",target:"jp",cif:false,amount:null},
+      {name:"中国国内配送",cur:"CNY",basis:"lot",target:"cn",cif:false,amount:null}
+    ],
+    sales:{
+      jp:{prices:[{price:null}],onlineFee:null,consign:[{shop:"",rate:null}]},
+      cn:{prices:[{price:null}],onlineFee:null,consign:[{shop:"",rate:null}]}
+    }
+  };
+}
+// Accepts the current shape and the earlier multi-pattern shape.
+function normalize(d){
+  const b=newDoc(DEFAULT_FX);
+  const o={...b,...d};
+  o.character=d.character||"";
+  o.fx={...b.fx,...(d.fx||{})};
+  let q=d.qty||(Array.isArray(d.patterns)&&d.patterns[0]?{jp:d.patterns[0].jp,cn:d.patterns[0].cn}:null);
+  if(q&&q.jpOff===undefined&&(q.jp!==undefined||q.cn!==undefined))q={jpOff:q.jp??null,jpOn:null,cnOff:q.cn??null,cnOn:null};
+  o.qty={...b.qty,...(q||{})};
+  if(!Array.isArray(d.mfg)){
+    o.mfg=Array.isArray(d.initial)?d.initial.map(r=>({name:r.name,cur:r.cur,basis:"lot",amount:r.amount})):b.mfg;
+  }
+  o.logistics=(o.logistics||[]).map(r=>({name:r.name||"",cur:r.cur||"JPY",basis:r.basis||"piece",target:r.target||"all",cif:!!r.cif,amount:r.amount!==undefined?r.amount:(Array.isArray(r.prices)?r.prices[0]:null),intlRow:!!(r.intlRow||r.auto),auto:r.intlRow?r.auto!==false:!!r.auto}));
+  if(!o.logistics.some(r=>r.intlRow)){const r=o.logistics.find(r=>/^国際送料/.test(r.name));if(r){r.intlRow=true;r.auto=true}}
+  for(const r of o.logistics)if(r.intlRow){r.cur="CNY";r.basis="lot"}
+  o.size={...b.size,...(d.size||{})};
+  o.intl={...b.intl,...(d.intl||{})};delete o.intl.auto;
+  if(!SERVICES[o.intl.service])o.intl.service=b.intl.service;
+  const sj=d.sales?.jp||{},sc=d.sales?.cn||{};
+  const pr=x=>Array.isArray(x.prices)&&x.prices.length?x.prices.map(p=>({price:p.price??null})):[{price:x.price??x.retail??null}];
+  o.sales={jp:{...b.sales.jp,...sj,prices:pr(sj)},cn:{...b.sales.cn,...sc,prices:pr(sc)}};
+  for(const m of ["jp","cn"]){
+    const x=o.sales[m];
+    // earlier versions split the online fee into mall / payment %; fold them into one rate
+    if(x.onlineFee==null&&(has(x.mallFee)||has(x.payFee)))x.onlineFee=n(x.mallFee)+n(x.payFee);
+    for(const k of ["retail","oem","price","mallFee","payFee","otherFee"])delete x[k];
+  }
+  // consignment rates used to be one list shared by both markets
+  // consignment: one row per shop {shop, rate}; older versions stored bare rates (shared, then per market)
+  const shared=Array.isArray(d.consignRates)?d.consignRates:(Array.isArray(d.wsRates)?d.wsRates:[]);
+  for(const m of ["jp","cn"]){
+    const x=o.sales[m];
+    if(!Array.isArray(x.consign))x.consign=(Array.isArray(x.consignRates)?x.consignRates:shared).filter(has).map(r=>({shop:"",rate:r}));
+    x.consign=x.consign.map(c=>({shop:c.shop||"",rate:c.rate??null}));
+    if(!x.consign.length)x.consign=[{shop:"",rate:null}];
+    delete x.consignRates;
+  }
+  delete o.consignRates;
+  for(const k of ["patterns","materials","processing","initial","wsRates"])delete o[k];
+  return o;
+}
+
+/* ---------- international freight (飛流通王 料金表, CNY) ---------- */
+// Up to 20kg: first 0.5kg + each further 0.5kg, minimum 1kg. Above 20kg: per-kg rate by band, rounded up to `unit`.
+const SERVICES={
+  m_cn_eco:{name:"ECONOMY 中国出発",src:"2026年8月 運賃表",first:45,cont:16,unit:1,fuel:41.5,bands:[[45,19],[100,18],[300,17],[Infinity,17]]},
+  m_hd_exp:{name:"EXPRESS 華東出発",src:"2026年8月 運賃表",first:36,cont:14,unit:1,fuel:41.5,bands:[[45,20],[100,19],[300,19],[Infinity,18]]},
+  m_hn_exp:{name:"EXPRESS 華南出発（帯電）",src:"2026年8月 運賃表",first:70,cont:21,unit:1,fuel:41.5,bands:[[45,29],[100,27],[300,26],[Infinity,24]]},
+  m_hk_exp:{name:"EXPRESS 香港出発",src:"2026年8月 運賃表",first:70,cont:21,unit:1,fuel:41.5,bands:[[45,29],[100,27],[300,26],[Infinity,24]]},
+  m_hn_eco:{name:"ECONOMY 華南出発（帯電）",src:"2026年8月 運賃表",first:70,cont:21,unit:1,fuel:41.5,bands:[[45,28],[100,27],[300,26],[Infinity,24]]},
+  q_parcel:{name:"報価表 包裹・大貨優惠価",src:"報価表",first:45,cont:16,unit:0.1,fuel:46,bands:[[45,19],[70,18],[100,17],[Infinity,17]]}
+};
+function freightCNY(kg,svc,fuel){
+  if(!(kg>0))return {base:0,charged:0,total:0};
+  let base,charged;
+  if(kg<=20){charged=Math.max(1,Math.ceil(kg*2-1e-9)/2);base=svc.first+(charged/0.5-1)*svc.cont}
+  else{charged=Math.ceil(kg/svc.unit-1e-9)*svc.unit;const rate=svc.bands.find(b=>charged<=b[0])[1];base=rate*charged}
+  return {base,charged,total:base*(1+n(fuel)/100)};
+}
+function estWeightG(h){return 0.019*h*h*h}  // rough plush weight from height: 20cm ≈ 150g
+function shipCalc(d){
+  const h=n(d.size.height),sv=SERVICES[d.intl.service]||SERVICES.m_cn_eco,q=qJP(d),N=Math.max(1,Math.round(n(d.intl.shipments)||1));
+  const wG=has(d.size.weightG)?n(d.size.weightG):(h>0?estWeightG(h):0);
+  const volPc=h>0?h*(h*n(d.size.ratioW))*(h*n(d.size.ratioD))/6000*(1-n(d.size.compress)/100):0;
+  const actual=wG/1000*q,vol=volPc*q,chargeKg=Math.max(actual,vol);
+  const f=freightCNY(chargeKg/N,sv,d.intl.fuel);
+  const cny=(f.total+n(d.intl.customs))*N;
+  return {ok:h>0&&q>0,sv,h,wG,estimated:!has(d.size.weightG),volPc,actual,vol,chargeKg,N,perShip:f,cny};
+}
+
+const qJP=d=>n(d.qty.jpOff)+n(d.qty.jpOn),qCN=d=>n(d.qty.cnOff)+n(d.qty.cnOn);
+
+/* ---------- calculation ---------- */
+function toJPY(v,cur){if(!has(v))return 0;return n(v)*(cur==="JPY"?1:n(doc.fx[cur]))}
+function calc(d){
+  const keep=1-n(d.lossRate)/100,duty=n(d.dutyRate)/100;
+  const jp=qJP(d),cn=qCN(d),tot=jp+cn;
+  const gJ=jp*keep,gC=cn*keep,gT=tot*keep;
+  // per good piece: lot totals are spread over good units; per-piece costs are lifted by the loss rate
+  let mfg=0;
+  for(const r of d.mfg){const a=toJPY(r.amount,r.cur);mfg+=r.basis==="lot"?(gT>0?a/gT:0):(keep>0?a/keep:0)}
+  const log={all:0,jp:0,cn:0},cif={all:0,jp:0};
+  const ship=shipCalc(d);
+  for(const r of d.logistics){
+    const t=r.target||"all",g=t==="jp"?gJ:t==="cn"?gC:gT;
+    const a=r.intlRow&&r.auto?ship.cny*n(doc.fx.CNY):toJPY(r.amount,r.cur);
+    const per=r.basis==="lot"?(g>0?a/g:0):a;
+    log[t]+=per;
+    if(r.cif&&t!=="cn")cif[t]+=per;
+  }
+  const cifPc=mfg+cif.all+cif.jp,dutyPc=cifPc*duty;
+  // Japanese import: customs value for the JP lot, duty, import consumption tax (国税+地方税), and the carrier's advance fee per shipment
+  const cifT=cifPc*gJ,dutyT=dutyPc*gJ,taxT=(cifT+dutyT)*n(d.importTaxRate)/100;
+  const N=ship.N,perShip=(dutyT+taxT)/N;
+  const feeEach=perShip<100?0:perShip<=24000?1200:Math.min(perShip*0.05,30000);
+  const feeT=gJ>0?feeEach*N:0;
+  const imp={cifT,dutyT,taxT,feeT,feeEach,N,perShip};
+  const taxPc=gJ>0?taxT/gJ:0,feePc=gJ>0?feeT/gJ:0;
+  const costJP=gJ>0?mfg+log.all+log.jp+dutyPc+taxPc+feePc:null;
+  const costCN=gC>0?mfg+log.all+log.cn:null;
+  const lot=(costJP||0)*gJ+(costCN||0)*gC;
+  return {ship,imp,taxPc,feePc,jp,cn,tot,gJ,gC,gT,mfg,log,cifPc,dutyPc,costJP,costCN,lot,avg:gT>0?lot/gT:null};
+}
+// net = what we receive per piece; costRate = cost ÷ net
+function channels(market,cost,local){
+  const s=doc.sales[market],rate=market==="cn"?n(doc.fx.CNY):1;
+  if(!has(local))return null;
+  const P=n(local)*rate;
+  const mk=(key,name,sub,net,fee)=>{const pr=cost==null?null:net-cost;return {key,name,sub,net,fee,profit:pr,costRate:cost==null||!(net>0)?null:cost/net}};
+  const out=[mk("direct","自社販売","店頭・イベント",P,0)];
+  for(const c of s.consign){if(has(c.rate))out.push(mk("consign","委託販売",`${c.shop.trim()||"店名未入力"}（掛率${n(c.rate)}%）`,P*n(c.rate)/100,P-P*n(c.rate)/100))}
+  const fee=P*n(s.onlineFee)/100;
+  out.push(mk("online","オンライン販売",fee?`手数料 ${yen0(fee)}`:"手数料 未入力",P-fee,fee));
+  return {price:P,local:n(local),list:out};
+}
+
+/* ---------- rendering ---------- */
+function curSel(path,val){return `<select data-path="${path}" aria-label="通貨">${CURS.map(c=>`<option value="${c}"${c===val?" selected":""}>${CUR_LABEL[c]}</option>`).join("")}</select>`}
+function numIn(path,val,label,w){return `<input type="number" step="any" data-path="${path}" value="${val==null?"":esc(val)}" placeholder="入力" aria-label="${esc(label)}"${w?` style="width:${w}px"`:""}>`}
+function basisSel(path,val){return `<select data-path="${path}" aria-label="計上方法">${[["piece","1個あたり"],["lot","ロット総額"]].map(([v,l])=>`<option value="${v}"${val===v?" selected":""}>${l}</option>`).join("")}</select>`}
+function cardHead(no,title,desc){return `<div class="card-h"><span class="b">${no}</span><div><h2>${title}</h2><p>${desc}</p></div></div>`}
+function delBtn(k,j){return `<button class="ghost" data-act="delRow" data-k="${k}" data-j="${j}" aria-label="行を削除" title="行を削除">✕</button>`}
+
+function knownShops(mk){
+  const m=new Map();
+  for(const e of list){const c=e.data?.sales?.[mk]?.consign;if(Array.isArray(c))for(const x of c){const k=(x.shop||"").trim();if(k&&has(x.rate)&&!m.has(k))m.set(k,n(x.rate))}}
+  return [...m.entries()];
+}
+function intlPanel(d){
+  const i=d.intl,z=d.size;
+  return `<div class="intl">
+    <div class="intl-h"><span class="sw">国際送料の計算条件</span><span class="small muted">飛流通王（上海）料金表 ／ 日本販売分のみ</span></div>
+    <div class="fields">
+      <div class="field"><label>サービス</label><select data-path="intl.service">${Object.entries(SERVICES).map(([k,v])=>`<option value="${k}"${i.service===k?" selected":""}>${v.name}（${v.src}）</option>`).join("")}</select></div>
+      <div class="field"><label>燃油サーチャージ</label><div class="row">${numIn("intl.fuel",i.fuel,"燃油サーチャージ")}<span class="unit">%</span></div></div>
+      <div class="field"><label>発送回数（票数）</label><div class="row">${numIn("intl.shipments",i.shipments,"発送回数")}<span class="unit">回</span></div></div>
+      <div class="field"><label>出口正式報関（1票あたり）</label><div class="row">${numIn("intl.customs",i.customs,"報関費")}<span class="unit">元</span></div><span class="small muted">必要な場合 250元</span></div>
+    </div>
+    <div class="subhead">梱包サイズの想定（<span data-out="hNote"></span>）</div>
+    <div class="fields">
+      <div class="field"><label>幅（高さに対する比率）</label><div class="row">${numIn("size.ratioW",z.ratioW,"幅の比率")}<span class="unit">倍</span></div></div>
+      <div class="field"><label>奥行（高さに対する比率）</label><div class="row">${numIn("size.ratioD",z.ratioD,"奥行の比率")}<span class="unit">倍</span></div></div>
+      <div class="field"><label>圧縮梱包による容積減</label><div class="row">${numIn("size.compress",z.compress,"圧縮率")}<span class="unit">%</span></div></div>
+      <div class="field"><label>1個あたり重量（実測値）</label><div class="row">${numIn("size.weightG",z.weightG,"1個あたり重量")}<span class="unit">g</span></div><span class="small muted" data-out="wHint"></span></div>
+    </div>
+    <div class="intl-res" id="intlRes"></div>
+  </div>`;
+}
+// Evaluate another estimate with the same calc code (calc/channels read the global doc).
+function summarize(data){
+  const saved=doc;
+  try{
+    doc=normalize(JSON.parse(JSON.stringify(data)));
+    const R=calc(doc),out={d:doc,R};
+    for(const mk of ["jp","cn"]){
+      const cost=mk==="jp"?R.costJP:R.costCN;
+      const pats=doc.sales[mk].prices.filter(p=>has(p.price)).map(p=>{const ch=channels(mk,cost,p.price);return {price:ch.price,local:ch.local,direct:ch.list.find(c=>c.key==="direct")}});
+      out[mk]={cost,qty:mk==="jp"?R.jp:R.cn,pats:pats.slice(0,2),npat:pats.length};
+    }
+    return out;
+  }finally{doc=saved}
+}
+function renderList(){
+  const m=$("#main");
+  const items=list.length?list:(doc&&!localOnly?[{id:curId,data:doc}]:localOnly&&doc?[{id:curId,data:doc}]:[]);
+  const rows=items.filter(e=>!charFilter||charOf(e.id===curId&&doc?doc:e.data)===charFilter)
+    .map(e=>({id:e.id,...summarize(e.id===curId&&doc?doc:e.data)}))
+    .sort((a,b)=>charOf(a.d).localeCompare(charOf(b.d),"ja")||String(a.d.name||"").localeCompare(String(b.d.name||""),"ja"));
+  const rc=v=>v==null?"":`<span class="rate ${rateCls(v)}">${pct(v)}</span>`;
+  // up to two price patterns stacked in each cell, the rest summarised as "他◯パターン"
+  const stack=(x,f)=>x.pats.length?x.pats.map(f).join(""):'<span class="muted">—</span>';
+  const more=x=>x.npat>2?`<span class="sub">他${x.npat-2}パターン</span>`:"";
+  const cell=(x,mk)=>`<td class="num">${yen(x.cost)}</td>
+    <td class="num">${stack(x,p=>`<div class="pl">${yen0(p.price)}${mk==="cn"?`<small>${p.local.toLocaleString("ja-JP",{maximumFractionDigits:2})}元</small>`:""}</div>`)}${more(x)}</td>
+    <td>${stack(x,p=>`<div class="pl">${p.direct?rc(p.direct.costRate):""}</div>`)}</td>
+    <td class="num">${stack(x,p=>`<div class="pl ${cls(p.direct?.profit)}"><b>${p.direct?yen(p.direct.profit):""}</b></div>`)}</td>`;
+  m.innerHTML=`
+  <section class="listhead">
+    <div><h2>商品一覧</h2><p class="small muted">${charFilter?`キャラクター「${esc(charFilter)}」の商品`:"すべての商品"}・${rows.length}件。行をクリックすると見積もりを開きます。</p></div>
+  </section>
+  ${rows.length?`<div class="tbl-wrap listwrap"><table class="plist">
+    <thead>
+      <tr><th rowspan="2">商品名</th><th rowspan="2">キャラクター</th><th rowspan="2" class="r">サイズ</th><th rowspan="2" class="r">製造数<span class="sub">日本 / 中国</span></th>
+        <th colspan="4" class="mh jp">日本販売</th><th colspan="4" class="mh cn">中国販売</th></tr>
+      <tr><th class="r jp">原価/個</th><th class="r jp">販売価格</th><th class="jp">原価率</th><th class="r jp">利益/個</th>
+        <th class="r cn">原価/個</th><th class="r cn">販売価格</th><th class="cn">原価率</th><th class="r cn">利益/個</th></tr>
+    </thead>
+    <tbody>${rows.map(r=>`<tr data-open="${esc(r.id)}" tabindex="0">
+      <td><b>${esc(r.d.name||"商品名未入力")}</b></td>
+      <td><span class="chartag">${esc(charOf(r.d))}</span></td>
+      <td class="num">${has(r.d.size.height)?esc(r.d.size.height)+"cm":"—"}</td>
+      <td class="num">${r.jp.qty.toLocaleString()} / ${r.cn.qty.toLocaleString()}</td>
+      ${cell(r.jp,"jp")}${cell(r.cn,"cn")}</tr>`).join("")}</tbody>
+  </table></div>
+  <p class="small muted">販売価格はパターン2まで表示し、原価率・利益は各パターンを自社販売で計算した値です。原価率 = 原価 ÷ 手取り額。</p>`
+  :`<section class="card empty"><h2>商品がありません</h2><p class="muted">「新規作成」から見積もりを作ると、ここに一覧で並びます。</p></section>`}`;
+}
+function render(){
+  const m=$("#main");
+  renderSide();
+  if(kpiObs){kpiObs.disconnect();kpiObs=null}
+  $("#btnList").setAttribute("aria-pressed",view==="list");
+  if(view==="list"){renderList();return}
+  if(!doc){
+    m.innerHTML=`<section class="card empty"><h2>見積もりがまだありません</h2><p class="muted">「新規作成」から最初の見積もりを作ると、製造費用・送料・販売価格を入力できます。</p><button class="primary" data-act="new">＋ 新規作成</button></section>`;
+    return;
+  }
+  const d=doc;
+  m.innerHTML=`
+  <div id="modeNote" class="notice" hidden></div>
+  <section class="infocard">
+    <div class="titlerow">
+      <div class="field grow"><label for="f-name">商品名</label><input id="f-name" class="title-in" data-path="name" value="${esc(d.name)}" placeholder="商品名を入力（例：くま 20cm）"></div>
+      <div class="actions">
+        <button data-act="dup">複製</button>
+        ${pendingDelete?`<span class="confirm">削除しますか？ <button class="danger" data-act="delYes">削除する</button><button data-act="delNo">やめる</button></span>`:`<button class="danger" data-act="delAsk">削除</button>`}
+      </div>
+    </div>
+    <div class="info-grid">
+      <div class="field"><label for="f-char">キャラクター</label><input id="f-char" data-path="character" value="${esc(d.character)}" list="charOptions" placeholder="例：くまのモコ"></div>
+      <div class="field"><label for="f-memo">メモ</label><input id="f-memo" data-path="memo" value="${esc(d.memo)}" placeholder="工場名、仕様など"></div>
+    </div>
+    <div class="meta" id="metaLine">${d.updatedAt?`最終更新 ${fmtDate(d.updatedAt)}`:""}</div>
+  </section>
+  ${canWrite?`<div class="edit-hint"><span class="sw" aria-hidden="true"></span><span><b>この色の枠</b>はクリックして入力できます。入力すると結果サマリーがすぐに計算され、自動で保存されます。</span></div>`:""}
+
+  <div class="mini" id="mini" hidden></div>
+
+  <section id="s-summary" style="display:flex;flex-direction:column;gap:12px">
+    <div class="summary-h"><h2 style="font-size:18px">結果サマリー</h2><span class="small muted">金額は円・税抜、1個あたりは良品1個あたり</span></div>
+    <div class="legend"><span class="cat-mfg"><i class="dot"></i>製造費用</span><span class="cat-log"><i class="dot"></i>物流</span><span class="cat-duty"><i class="dot"></i>関税</span><span class="cat-tax"><i class="dot"></i>輸入消費税</span><span class="cat-fee"><i class="dot"></i>立替手数料</span><span>　原価率 = 原価 ÷ 1個あたりの手取り額</span></div>
+    <div class="markets-sum" id="sumBody"></div>
+  </section>
+
+  <section class="card cat-basic" id="s-basic">
+    ${cardHead(1,"基本設定・為替","為替レート・ロス率・関税率は、この見積もりだけに使われます")}
+    <div class="fields">
+      <div class="field"><label>1元あたり</label><div class="row">${numIn("fx.CNY",d.fx.CNY,"人民元レート")}<span class="unit">円</span></div></div>
+      <div class="field"><label>1ドルあたり</label><div class="row">${numIn("fx.USD",d.fx.USD,"ドルレート")}<span class="unit">円</span></div></div>
+      <div class="field"><label>不良・ロス率</label><div class="row">${numIn("lossRate",d.lossRate,"ロス率")}<span class="unit">%</span></div></div>
+      <div class="field"><label>関税率（日本輸入分・CIF基準）</label><div class="row">${numIn("dutyRate",d.dutyRate,"関税率")}<span class="unit">%</span></div><span class="small muted">ぬいぐるみ（9503.00）は通常 無税</span></div>
+      <div class="field"><label>輸入消費税率（国税＋地方税）</label><div class="row">${numIn("importTaxRate",d.importTaxRate,"輸入消費税率")}<span class="unit">%</span></div></div>
+    </div>
+    <div class="fxbar" id="fxNote"></div>
+  </section>
+
+  <section class="card cat-qty" id="s-qty">
+    ${cardHead(2,"製造数量・サイズ","日本・中国それぞれ、オフライン販売分とオンライン販売分を分けて入力します。サイズ（高さ）は国際送料の計算に使います")}
+    <div class="qtybox">
+      ${[["jp","日本販売分"],["cn","中国販売分"]].map(([mk,l])=>`<div class="field ${mk} mkt">
+        <span class="lbl"><span class="tag ${mk}">${l}</span></span>
+        <div class="qrow"><label for="q-${mk}Off">オフライン販売分</label><div class="row">${numIn(`qty.${mk}Off`,d.qty[mk+"Off"],l+" オフライン販売分")}<span class="unit">個</span></div></div>
+        <div class="qrow"><label for="q-${mk}On">オンライン販売分</label><div class="row">${numIn(`qty.${mk}On`,d.qty[mk+"On"],l+" オンライン販売分")}<span class="unit">個</span></div></div>
+        <div class="qsub">小計 <b data-out="${mk}Sub"></b></div>
+      </div>`).join("")}
+      <div class="field tot"><span class="lbl">合計 / 良品数（ロス率反映）</span><span class="big" data-out="qtyTot"></span></div>
+      <div class="field size"><label>サイズ</label><div class="row">${numIn("size.height",d.size.height,"サイズ")}<span class="unit">cm</span></div></div>
+    </div>
+  </section>
+
+  <section class="card cat-mfg" id="s-mfg">
+    ${cardHead(3,"製造費用","「ロット総額」は良品数で割って1個あたりに按分します。「1個あたり」はロス率の分だけ割り増しします")}
+    <div class="tbl-wrap"><table class="in">
+      <thead><tr><th>項目</th><th>計上方法</th><th>通貨</th><th class="r">金額</th><th class="r">1個あたり（円）</th><th></th></tr></thead>
+      <tbody>${d.mfg.map((r,j)=>`<tr>
+        <td><input class="name" data-path="mfg.${j}.name" value="${esc(r.name)}" aria-label="項目名" placeholder="例：包装費用"></td>
+        <td>${basisSel(`mfg.${j}.basis`,r.basis)}</td>
+        <td>${curSel(`mfg.${j}.cur`,r.cur)}</td>
+        <td class="r">${numIn(`mfg.${j}.amount`,r.amount,"金額")}</td>
+        <td class="r num" data-out="mfg${j}"></td>
+        <td>${delBtn("mfg",j)}</td></tr>`).join("")}</tbody>
+      <tfoot><tr><td colspan="4">製造費用 / 個</td><td class="r num" data-out="mfgTot"></td><td></td></tr></tfoot>
+    </table></div>
+    <button class="add" data-act="addRow" data-k="mfg">＋ 項目を追加</button>
+  </section>
+
+  <section class="card cat-log" id="s-log">
+    ${cardHead(4,"物流","「対象」で日本向け・中国向け・共通を選びます。「CIF」にチェックした送料は関税の課税価格に含めます")}
+    <div class="tbl-wrap"><table class="in">
+      <thead><tr><th>項目</th><th>対象</th><th>計上方法</th><th>通貨</th><th title="関税の課税価格に含める">CIF</th><th class="r">金額</th><th class="r">1個あたり（円）</th><th></th></tr></thead>
+      <tbody>${d.logistics.map((r,j)=>{const au=r.intlRow;return `<tr${au?' class="autorow"':""}>
+        <td><input class="name" data-path="logistics.${j}.name" value="${esc(r.name)}" aria-label="項目名" placeholder="例：国際送料"></td>
+        <td><select data-path="logistics.${j}.target" aria-label="対象">${[["all","共通"],["jp","日本向け"],["cn","中国向け"]].map(([v,l])=>`<option value="${v}"${r.target===v?" selected":""}>${l}</option>`).join("")}</select></td>
+        <td>${au?'<span class="small muted">ロット総額</span>':basisSel(`logistics.${j}.basis`,r.basis)}</td>
+        <td>${au?'<span class="small muted">元</span>':curSel(`logistics.${j}.cur`,r.cur)}</td>
+        <td><input type="checkbox" data-path="logistics.${j}.cif"${r.cif?" checked":""}${r.target==="cn"?" disabled":""} aria-label="CIFに含める"></td>
+        <td class="r">${numIn(`logistics.${j}.amount`,r.amount,"金額")}${au?`<div class="autonote" data-out="autoNote${j}"></div>`:""}</td>
+        <td class="r num" data-out="log${j}"></td>
+        <td>${delBtn("logistics",j)}</td></tr>`}).join("")}</tbody>
+    </table></div>
+    <button class="add" data-act="addRow" data-k="logistics">＋ 項目を追加</button>
+
+  </section>
+
+  <section class="card cat-sales" id="s-sales">
+    ${cardHead(5,"販売価格","価格パターンを複数入れると、それぞれの原価率と利益がサマリーに並びます。手数料が未定なら空欄のままで構いません")}
+    <div class="markets">
+      ${["jp","cn"].map(mk=>{const s=d.sales[mk],u=mk==="jp"?"円":"元";return `<div class="market ${mk}">
+        <h3><span class="tag ${mk}">${mk==="jp"?"日本販売":"中国販売"}</span></h3>
+        <div class="subhead">販売価格（税抜）</div>
+        <div class="tbl-wrap"><table class="in prices">
+          <thead><tr><th>パターン</th><th class="r">価格（${u}）</th><th class="r">${mk==="jp"?"税込":"円換算"}</th><th></th></tr></thead>
+          <tbody>${s.prices.map((p,i)=>`<tr>
+            <td><span class="pname">パターン${i+1}</span></td>
+            <td class="r">${numIn(`sales.${mk}.prices.${i}.price`,p.price,"販売価格",110)}</td>
+            <td class="r num small muted" data-out="${mk}Price${i}"></td>
+            <td>${s.prices.length>1?`<button class="ghost" data-act="delPrice" data-m="${mk}" data-i="${i}" aria-label="価格を削除" title="価格を削除">✕</button>`:""}</td></tr>`).join("")}</tbody>
+        </table></div>
+        ${s.prices.length<6?`<button class="add" data-act="addPrice" data-m="${mk}">＋ 価格パターンを追加</button>`:""}
+        <div class="field" style="max-width:240px"><div class="subhead ch-online">オンライン販売の手数料</div><div class="row">${numIn(`sales.${mk}.onlineFee`,s.onlineFee,"オンライン販売の手数料")}<span class="unit">%</span></div></div>
+        <div class="field"><div class="subhead ch-consign">委託販売の掛率</div>
+          <p class="small muted">お店ごとの掛率を入れると結果サマリーに表示されます。空欄の行は表示されません。</p>
+          <div class="crates">${s.consign.map((c,i)=>`<div class="crate">
+            <input class="shop" data-path="sales.${mk}.consign.${i}.shop" value="${esc(c.shop)}" list="shops-${mk}" placeholder="店名" aria-label="委託先の店名">
+            ${numIn(`sales.${mk}.consign.${i}.rate`,c.rate,"掛率",80)}<span class="unit">%</span>
+            ${s.consign.length>1?`<button class="ghost" data-act="delRate" data-m="${mk}" data-i="${i}" aria-label="お店を削除" title="お店を削除">✕</button>`:""}</div>`).join("")}</div>
+          <datalist id="shops-${mk}">${knownShops(mk).map(([n_])=>`<option value="${esc(n_)}"></option>`).join("")}</datalist>
+          <button class="add" data-act="addRate" data-m="${mk}" style="--c:var(--ch-consign);--c-soft:#FBF4DC">＋ お店を追加</button>
+        </div>
+      </div>`}).join("")}
+    </div>
+  </section>`;
+  if(localOnly||!canWrite){
+    const note=$("#modeNote");note.hidden=false;
+    note.textContent=localOnly?"保存先に接続できないため、試算のみできます（入力内容は保存されません）。":"閲覧のみの権限です。見積もりの編集はできません。";
+  }
+  if(!canWrite){m.querySelectorAll("input,select").forEach(e=>e.disabled=true);m.querySelectorAll("[data-act]").forEach(b=>b.disabled=true)}
+  updateOutputs();
+  const kp=$("#s-summary"),mini=$("#mini");
+  if(kp&&mini&&"IntersectionObserver" in window){
+    kpiObs=new IntersectionObserver(es=>{for(const e of es)mini.hidden=e.isIntersecting||e.boundingClientRect.top>0});
+    kpiObs.observe(kp);
+  }
+}
+
+function rateCls(r){if(r==null)return"";return r<=0.4?"ok":r<=0.6?"mid":"hi"}
+function updateOutputs(){
+  if(!doc)return;
+  const R=calc(doc),keep=1-n(doc.lossRate)/100;
+  const set=(k,v)=>{const e=document.querySelector(`[data-out="${k}"]`);if(e)e.textContent=v};
+  set("jpSub",`${R.jp.toLocaleString()}個`);set("cnSub",`${R.cn.toLocaleString()}個`);
+  set("qtyTot",`${R.tot.toLocaleString()}個 / ${(Math.round(R.gT*10)/10).toLocaleString()}個`);
+  doc.mfg.forEach((r,j)=>{const a=toJPY(r.amount,r.cur);set("mfg"+j,has(r.amount)?yen(r.basis==="lot"?(R.gT>0?a/R.gT:NaN):(keep>0?a/keep:NaN)):"—")});
+  set("mfgTot",yen(R.mfg));
+  doc.logistics.forEach((r,j)=>{
+    const g=r.target==="jp"?R.gJ:r.target==="cn"?R.gC:R.gT;
+    if(r.intlRow){
+      const calcV=R.ship.ok?Math.round(R.ship.cny):null;
+      if(r.auto){r.amount=calcV;const inp=document.querySelector(`[data-path="logistics.${j}.amount"]`);if(inp&&document.activeElement!==inp)inp.value=calcV==null?"":calcV}
+      const note=document.querySelector(`[data-out="autoNote${j}"]`);
+      if(note)note.innerHTML=r.auto?(R.ship.ok?`<span class="autobadge">自動計算</span>`:`<span class="small muted">高さを入れると自動計算</span>`)
+        :`<span class="small muted">料金表：${calcV==null?"—":calcV.toLocaleString()+"元"}</span> <button class="linkbtn" data-act="resetIntl" data-j="${j}">自動計算に戻す</button>`;
+    }
+    const a=toJPY(r.amount,r.cur);set("log"+j,has(r.amount)?yen(r.basis==="lot"?(g>0?a/g:NaN):a):"—")});
+  const ib=$("#impBox"),I=R.imp;
+  if(ib){
+    ib.innerHTML=R.gJ>0?`<div class="intl-h"><span class="sw" style="color:var(--c-tax)">輸入時に配送業者へ支払う額（日本販売分）</span><span class="small muted">配送業者が日本の税関で立て替えて請求する分</span></div>
+      <div class="intl-res">
+        <div><span class="lb">課税価格（CIF）</span><span class="v">${yen0(I.cifT)}</span></div>
+        <div><span class="lb">関税（${n(doc.dutyRate)}%）</span><span class="v">${yen0(I.dutyT)}</span></div>
+        <div><span class="lb">輸入消費税（${n(doc.importTaxRate)}%）</span><span class="v">${yen0(I.taxT)}</span></div>
+        <div><span class="lb">立替手数料</span><span class="v">${yen0(I.feeT)}</span><span class="small muted">${I.feeEach?`${yen0(I.feeEach)} × ${I.N}票`:"100円未満は無料"}</span></div>
+        <div><span class="lb">合計 / 1個あたり</span><span class="v big" style="color:var(--c-tax)">${yen0(I.dutyT+I.taxT+I.feeT)}</span><span class="small muted">${yen(R.dutyPc+R.taxPc+R.feePc)} / 個</span></div>
+        <div class="full">立替手数料は料金表の規定（関税＋消費税が1票あたり100円未満は無料、24,000円までは1,200円、超える分は5%・上限30,000円、いずれも消費税別）で計算。輸入消費税は原価に含めています。</div>
+      </div>`:"";
+  }
+  const S=R.ship,ir=$("#intlRes");
+  set("hNote",S.h>0?`高さ ${S.h}cm → ${S.h}×${+(S.h*n(doc.size.ratioW)).toFixed(1)}×${+(S.h*n(doc.size.ratioD)).toFixed(1)}cm で計算`:"高さ未入力");
+  set("wHint",S.h>0?(S.estimated?`空欄のため高さから推定：約${Math.round(S.wG)}g`:"実測値を使用"):"高さを入れると推定します");
+  if(ir){
+    if(!S.ok)ir.innerHTML=`<div class="full">「製造数量・サイズ」で高さと日本販売分の数量を入れると、国際送料を計算します。</div>`;
+    else{
+      const k=v=>v.toLocaleString("ja-JP",{maximumFractionDigits:1});
+      const jpy=S.cny*n(doc.fx.CNY);
+      ir.innerHTML=`<div><span class="lb">1個あたり 実重量 / 容積重量</span><span class="v">${(S.wG/1000).toFixed(2)}kg / ${S.volPc.toFixed(2)}kg</span></div>
+        <div><span class="lb">合計 実重量 / 容積重量</span><span class="v">${k(S.actual)}kg / ${k(S.vol)}kg</span></div>
+        <div><span class="lb">請求重量（1票あたり）</span><span class="v">${k(S.perShip.charged)}kg × ${S.N}票</span></div>
+        <div><span class="lb">国際送料 合計</span><span class="v big">${S.cny.toLocaleString("ja-JP",{maximumFractionDigits:0})}元</span><span class="small muted">≈ ${yen0(jpy)}</span></div>
+        <div><span class="lb">1個あたり（良品）</span><span class="v big">${R.gJ>0?yen(jpy/R.gJ):"—"}</span></div>
+        <div class="full">基本運賃 ${S.perShip.base.toLocaleString("ja-JP",{maximumFractionDigits:0})}元 × 燃油 ${n(doc.intl.fuel)}%${n(doc.intl.customs)?` ＋ 報関 ${n(doc.intl.customs)}元`:""}（1票あたり）。実重量と容積重量（縦×横×高さ÷6000）の重い方で計算。${S.vol>S.actual?"今回は容積重量で計算しています。":"今回は実重量で計算しています。"}</div>`;
+    }
+  }
+  const s=doc.sales;
+  s.jp.prices.forEach((p,i)=>set("jpPrice"+i,has(p.price)?yen0(n(p.price)*1.1):"—"));
+  s.cn.prices.forEach((p,i)=>set("cnPrice"+i,has(p.price)?yen0(n(p.price)*n(doc.fx.CNY)):"—"));
+  const fn=$("#fxNote");
+  if(fn){
+    const diff=n(doc.fx.CNY)!==n(commonFx.CNY)||n(doc.fx.USD)!==n(commonFx.USD);
+    fn.innerHTML=`<span>社内共通レート：<b>1元 = ${esc(commonFx.CNY)}円</b> / <b>1ドル = ${esc(commonFx.USD)}円</b> <span class="muted">（${esc(commonFx.updatedAt||"")} ${esc(commonFx.note||"")}）</span></span>
+      ${canWrite?`<button data-act="applyFx"${diff?"":" disabled"}>共通レートを反映</button><button data-act="saveFx"${diff?"":" disabled"}>このレートを共通にする</button>`:""}`;
+  }
+  // summary per market
+  const sb=$("#sumBody");
+  if(sb)sb.innerHTML=["jp","cn"].map(mk=>{
+    const cost=mk==="jp"?R.costJP:R.costCN,good=mk==="jp"?R.gJ:R.gC,qty=mk==="jp"?R.jp:R.cn;
+    const seg=[["mfg",R.mfg,"製造費用"],["log",R.log.all+(mk==="jp"?R.log.jp:R.log.cn),"物流"],["duty",mk==="jp"?R.dutyPc:0,"関税"],["tax",mk==="jp"?R.taxPc:0,"輸入消費税"],["fee",mk==="jp"?R.feePc:0,"立替手数料"]];
+    const bar=cost>0?`<div class="bar" role="img" aria-label="原価の内訳">${seg.filter(x=>x[1]>0).map(([k,v,l])=>`<span class="${k}" style="width:${(v/cost*100).toFixed(2)}%" title="${l} ${yen(v)}"></span>`).join("")}</div>`:`<div class="bar"></div>`;
+    const cnyNote=mk==="cn"&&cost!=null&&n(doc.fx.CNY)?`${(cost/n(doc.fx.CNY)).toFixed(2)}元`:(mk==="jp"&&(R.dutyPc+R.taxPc+R.feePc)?`うち関税・輸入消費税・立替手数料 ${yen(R.dutyPc+R.taxPc+R.feePc)}`:"");
+    const pats=doc.sales[mk].prices.map((p,i)=>({label:`パターン${i+1}`,ch:channels(mk,cost,p.price)})).filter(x=>x.ch);
+    const body=!pats.length?`<div class="hint">販売価格を入れると、自社販売・委託販売・オンライン販売の原価率と利益が表示されます。</div>`:cost==null?`<div class="hint">製造数量が0のため計算できません。</div>`:
+      pats.map(({label,ch})=>`<div class="pblock">
+        <div class="pblock-h"><span class="pname">${esc(label)}</span><span class="pval">${yen0(ch.price)}</span><span class="small muted">${mk==="cn"?`${ch.local.toLocaleString("ja-JP",{maximumFractionDigits:2})}元`:`税込 ${yen0(ch.price*1.1)}`}</span></div>
+        <table class="chtbl"><thead><tr><th>販売方法</th><th>手取り / 個</th><th>原価率</th><th>利益 / 個</th></tr></thead><tbody>
+        ${ch.list.map(c=>`<tr><td><span class="chname ch-${c.key}">${c.name} <small>${esc(c.sub)}</small></span></td><td class="num">${yen0(c.net)}</td><td><span class="rate ${rateCls(c.costRate)}">${pct(c.costRate)}</span></td><td class="num ${cls(c.profit)}"><b>${yen(c.profit)}</b></td></tr>`).join("")}
+        </tbody></table></div>`).join("");
+    return `<div class="msum ${mk}">
+      <div class="msum-h"><h3>${mk==="jp"?"日本販売":"中国販売"}</h3><span class="q">製造 ${qty.toLocaleString()}個（オフライン ${n(doc.qty[mk+"Off"]).toLocaleString()}・オンライン ${n(doc.qty[mk+"On"]).toLocaleString()}）／ 良品 ${(Math.round(good*10)/10).toLocaleString()}個</span></div>
+      <div class="msum-b">
+        <div class="figs">
+          <div class="fig cost"><span class="lb">原価 / 個</span><span class="v">${yen(cost)}</span>${bar}<span class="u">${cnyNote}</span></div>
+        </div>
+        ${body}
+      </div></div>`;
+  }).join("");
+  const mini=$("#mini");
+  if(mini)mini.innerHTML=`<strong>${esc(doc.name||"商品名未入力")}</strong><span class="p"><span class="tag jp">日本 原価</span><b>${yen(R.costJP)}</b></span><span class="p"><span class="tag cn">中国 原価</span><b>${yen(R.costCN)}</b></span>`;
+}
+
+function renderSide(){
+  const items=list.length?list:(doc?[{id:curId,data:doc}]:[]);
+  const view=items.map(e=>({id:e.id,d:e.id===curId&&doc?doc:e.data}));
+  const counts={};for(const v of view){const c=charOf(v.d);counts[c]=(counts[c]||0)+1}
+  const chars=Object.keys(counts).sort((a,b)=>a===NOCHAR?1:b===NOCHAR?-1:a.localeCompare(b,"ja"));
+  if(charFilter&&!counts[charFilter])charFilter="";
+  $("#charChips").innerHTML=`<button class="chip" data-filter="" aria-pressed="${!charFilter}">すべて<span class="cnt">${view.length}</span></button>`+chars.map(c=>`<button class="chip" data-filter="${esc(c)}" aria-pressed="${charFilter===c}">${esc(c)}<span class="cnt">${counts[c]}</span></button>`).join("");
+  const shown=chars.filter(c=>!charFilter||c===charFilter);
+  $("#estGroups").innerHTML=view.length?shown.map(c=>`<div><div class="grp-h">${esc(c)}</div><ul class="est-list">${view.filter(v=>charOf(v.d)===c).map(v=>`<li><button data-open="${esc(v.id)}"${v.id===curId?' aria-current="true"':""}><span class="nm">${esc(v.d.name||"商品名未入力")}</span><span class="dt">${v.d.updatedAt?"更新 "+fmtDate(v.d.updatedAt):"未保存"}</span></button></li>`).join("")}</ul></div>`).join(""):`<p class="small muted">まだありません</p>`;
+  $("#charOptions").innerHTML=chars.filter(c=>c!==NOCHAR).map(c=>`<option value="${esc(c)}"></option>`).join("");
+  $("#btnNew").disabled=!canWrite;
+}
+function setStatus(t,kind){const s=$("#saveStatus");s.textContent=t;s.classList.toggle("err",kind==="err");s.classList.toggle("busy",kind==="busy")}
+
+/* ---------- editing ---------- */
+function setPath(obj,path,val){const ks=path.split(".");let o=obj;for(let i=0;i<ks.length-1;i++)o=o[ks[i]];o[ks[ks.length-1]]=val}
+document.addEventListener("input",e=>{
+  const t=e.target;if(!doc||!t.dataset||!t.dataset.path)return;
+  let v;
+  if(t.type==="checkbox")v=t.checked;
+  else if(t.type==="number")v=t.value===""?null:parseFloat(t.value);
+  else v=t.value;
+  setPath(doc,t.dataset.path,v);
+  const p=t.dataset.path;
+  if(p==="intl.service"&&SERVICES[v])doc.intl.fuel=SERVICES[v].fuel;
+  const sm=p.match(/^sales\.(jp|cn)\.consign\.(\d+)\.shop$/);
+  if(sm){const row=doc.sales[sm[1]].consign[+sm[2]],hit=knownShops(sm[1]).find(([k])=>k===String(v).trim());
+    if(hit&&!has(row.rate)){row.rate=hit[1];const ri=document.querySelector(`[data-path="sales.${sm[1]}.consign.${sm[2]}.rate"]`);if(ri)ri.value=hit[1]}}
+  const am=p.match(/^logistics\.(\d+)\.amount$/);
+  if(am&&doc.logistics[+am[1]].intlRow)doc.logistics[+am[1]].auto=v==null;
+  if((t.tagName==="SELECT"&&p.endsWith(".target"))||p==="intl.service")render();
+  else updateOutputs();
+  if(p==="name")renderSide();
+  touch();
+});
+document.addEventListener("change",e=>{if(e.target.dataset?.path==="character")renderSide()});
+document.addEventListener("click",async e=>{
+  const f=e.target.closest("[data-filter]");
+  if(f){charFilter=f.dataset.filter;remember("charFilter",charFilter);if(view==="list")render();else renderSide();return}
+  const o=e.target.closest("[data-open]");
+  if(o){await openExisting(o.dataset.open);return}
+  const b=e.target.closest("[data-act]");if(!b||b.disabled)return;
+  const a=b.dataset.act;
+  if(a==="list"){await flush();view="list";remember("view",view);render();window.scrollTo({top:0});return}
+  if(a==="new")return createNew();
+  if(a==="delAsk"){pendingDelete=true;return render()}
+  if(a==="delNo"){pendingDelete=false;return render()}
+  if(a==="delYes")return removeCurrent();
+  if(!doc)return;
+  if(a==="dup"){const c=JSON.parse(JSON.stringify(doc));c.name=(doc.name||"商品名未入力")+" のコピー";return openNew(c)}
+  if(a==="addRow"){
+    const key=b.dataset.k;
+    doc[key].push(key==="mfg"?{name:"",cur:"CNY",basis:"lot",amount:null}:{name:"",cur:"JPY",basis:"piece",target:"all",cif:false,amount:null});
+    render();touch();
+    const inp=document.querySelector(`#s-${key==="mfg"?"mfg":"log"} tbody tr:last-child input.name`);if(inp)inp.focus();
+  }
+  if(a==="resetIntl"){doc.logistics[+b.dataset.j].auto=true;updateOutputs();touch();return}
+  if(a==="delRow"){doc[b.dataset.k].splice(+b.dataset.j,1);render();touch()}
+  if(a==="addPrice"){const ps=doc.sales[b.dataset.m].prices;ps.push({price:null});render();touch();const ins=document.querySelectorAll(`[data-path^="sales.${b.dataset.m}.prices."][data-path$=".price"]`);if(ins.length)ins[ins.length-1].focus()}
+  if(a==="addRate"){const r=doc.sales[b.dataset.m].consign;r.push({shop:"",rate:null});render();touch();const ins=document.querySelectorAll(`[data-path^="sales.${b.dataset.m}.consign."][data-path$=".shop"]`);if(ins.length)ins[ins.length-1].focus();return}
+  if(a==="delRate"){doc.sales[b.dataset.m].consign.splice(+b.dataset.i,1);render();touch();return}
+  if(a==="delPrice"){doc.sales[b.dataset.m].prices.splice(+b.dataset.i,1);render();touch()}
+  if(a==="applyFx"){doc.fx={CNY:n(commonFx.CNY),USD:n(commonFx.USD)};render();touch()}
+  if(a==="saveFx")saveCommonFx();
+});
+$("#btnNew").addEventListener("click",createNew);
+document.addEventListener("keydown",e=>{const r=e.target.closest&&e.target.closest("tr[data-open]");if(r&&(e.key==="Enter"||e.key===" ")){e.preventDefault();openExisting(r.dataset.open)}});
+
+async function openExisting(id){
+  if(view!=="edit"){view="edit";remember("view",view)}
+  if(id===curId){render();window.scrollTo({top:0});return}
+  await flush();
+  const it=list.find(x=>x.id===id);
+  if(it){curId=id;doc=normalize(JSON.parse(JSON.stringify(it.data)));dirty=false;pendingDelete=false;remember("lastEstimate",curId);render();window.scrollTo({top:0})}
+}
+function touch(){dirty=true;if(localOnly){setStatus("保存されません","busy");return}setStatus("未保存の変更","busy");clearTimeout(saveTimer);saveTimer=setTimeout(save,800)}
+async function save(){
+  if(!db||!doc||!curId)return;
+  if(saving){clearTimeout(saveTimer);saveTimer=setTimeout(save,400);return}
+  saving=true;dirty=false;setStatus("保存中…","busy");
+  const body=JSON.parse(JSON.stringify(doc));
+  body.updatedAt=new Date().toISOString();body.updatedBy=myId||null;
+  if(!body.createdAt)body.createdAt=body.updatedAt;
+  if(!body.createdBy)body.createdBy=myId||null;
+  doc.createdAt=body.createdAt;doc.createdBy=body.createdBy;doc.updatedAt=body.updatedAt;doc.updatedBy=body.updatedBy;
+  try{
+    await db.collection("estimates").doc(curId).set(body);lastSavedAt=Date.now();
+    setStatus(dirty?"未保存の変更":"保存しました",dirty?"busy":"");
+    const ml=$("#metaLine");if(ml)ml.textContent="最終更新 "+fmtDate(body.updatedAt);
+  }catch(err){
+    dirty=true;
+    if(err&&(err.code==="invalid_argument"||err.code==="permission-denied")){setStatus("保存できません。共有リンクが正しいか確認してください","err")}
+    else if(err&&err.code==="quota_exceeded")setStatus("保存容量の上限に達しました","err");
+    else setStatus("保存できませんでした。もう一度お試しください","err");
+  }
+  saving=false;
+}
+async function flush(){if(dirty&&db){clearTimeout(saveTimer);await save()}}
+async function createNew(){await flush();view="edit";remember("view",view);openNew(newDoc(commonFx))}
+async function openNew(d){
+  await flush();
+  delete d.createdAt;delete d.createdBy;delete d.updatedAt;delete d.updatedBy;
+  curId=uid();doc=normalize(d);pendingDelete=false;
+  if(!localOnly)list=[{id:curId,data:doc},...list];
+  render();remember("lastEstimate",curId);window.scrollTo({top:0});
+  if(!localOnly){dirty=true;await save()}
+}
+async function removeCurrent(){
+  pendingDelete=false;
+  const id=curId;
+  clearTimeout(saveTimer);dirty=false;
+  list=list.filter(x=>x.id!==id);
+  if(db&&!localOnly){try{await db.collection("estimates").doc(id).delete();setStatus("削除しました")}catch(e){setStatus("削除できませんでした","err")}}
+  if(list.length){curId=list[0].id;doc=normalize(JSON.parse(JSON.stringify(list[0].data)))}else{curId=null;doc=null}
+  render();
+}
+async function saveCommonFx(){
+  commonFx={CNY:n(doc.fx.CNY),USD:n(doc.fx.USD),updatedAt:today(),note:"手動更新"};
+  updateOutputs();
+  if(db&&!localOnly){try{await db.doc("settings/fx").set(commonFx);setStatus("共通レートを更新しました")}catch(e){setStatus("共通レートを保存できませんでした","err")}}
+}
+function remember(k,v){try{localStorage.setItem(k,v||"")}catch(e){}}
+function recall(k){try{return localStorage.getItem(k)}catch(e){return null}}
+
+/* ---------- boot ---------- */
+function showNoKey(){
+  document.querySelector(".layout").innerHTML=`<main style="grid-column:1/-1"><section class="card empty"><h2>このページは共有リンクから開いてください</h2><p class="muted">原価計算は、社内で共有している専用のリンク（URLの最後に # から始まる合言葉が付いたもの）からのみ使えます。リンクは管理者に確認してください。</p></section></main>`;
+}
+function bootLocal(){
+  localOnly=true;
+  curId="local";doc=normalize(newDoc(DEFAULT_FX));
+  render();setStatus("保存されません","busy");
+}
+render();
+(async()=>{
+  // The workspace key lives in the URL hash (#<key>); only people who have the full link can reach the data.
+  const key=decodeURIComponent(location.hash.slice(1)).trim();
+  if(!/^[A-Za-z0-9_-]{32,}$/.test(key)){showNoKey();return}
+  if(!window.firebase||!window.FIREBASE_CONFIG||!window.FIREBASE_CONFIG.projectId){bootLocal();setStatus("Firebaseの設定が未完了です","err");return}
+  firebase.initializeApp(window.FIREBASE_CONFIG);
+  const root=firebase.firestore().collection("spaces").doc(key);
+  db={collection:p=>root.collection(p),doc:p=>{const [c,d]=p.split("/");return root.collection(c).doc(d)}};
+  localOnly=false;
+  setStatus("読み込み中…","busy");
+  db.doc("settings/fx").onSnapshot(s=>{if(s.exists){commonFx={...DEFAULT_FX,...s.data()};updateOutputs()}},()=>{});
+  let first=true;
+  db.collection("estimates").orderBy("updatedAt","desc").onSnapshot(snap=>{
+    list=snap.docs.filter(x=>x.exists).map(x=>({id:x.id,data:x.data()}));
+    if(curId&&!list.find(x=>x.id===curId)&&doc&&(dirty||saving))list.unshift({id:curId,data:doc});
+    if(first){
+      first=false;
+      const want=recall("lastEstimate");
+      const it=list.find(x=>x.id===want)||list[0];
+      if(it){curId=it.id;doc=normalize(JSON.parse(JSON.stringify(it.data)))}
+      setStatus(list.length?"同期済み":"");
+      render();return;
+    }
+    const it=list.find(x=>x.id===curId);
+    if(!it&&curId&&!dirty&&!saving){
+      if(list.length){curId=list[0].id;doc=normalize(JSON.parse(JSON.stringify(list[0].data)))}else{curId=null;doc=null}
+      render();return;
+    }
+    if(it&&!dirty&&!saving&&!snap.metadata.hasPendingWrites&&it.data.updatedAt&&it.data.updatedAt!==doc?.updatedAt){
+      const focused=document.activeElement&&document.activeElement.closest&&document.activeElement.closest("#main");
+      if(!focused||Date.now()-lastSavedAt>3000){doc=normalize(JSON.parse(JSON.stringify(it.data)));render();setStatus("他のメンバーの変更を反映しました");return}
+    }
+    if(view==="list")render();else renderSide();
+  },()=>setStatus("読み込みに失敗しました","err"));
+})();
+})();
+</script>
+
+</body>
+</html>
