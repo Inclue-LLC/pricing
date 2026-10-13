@@ -97,7 +97,20 @@ input:disabled,select:disabled{background:var(--sunken)}
 .est-groups{display:flex;flex-direction:column;gap:10px;max-height:380px;overflow:auto}
 .grp-h{font-size:12px;font-weight:700;color:var(--brand);display:flex;align-items:center;gap:6px;padding:0 4px}
 .grp-h::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--brand)}
-.grp-t{font-size:11px;font-weight:700;color:var(--c-sales);padding:4px 4px 0 18px}
+.cgroup{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--surface)}
+.cgroup-h{display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--brand-soft);border-bottom:1px solid var(--line)}
+.cav{width:24px;height:24px;border-radius:50%;background:var(--brand);color:#fff;font-size:12px;font-weight:700;display:grid;place-items:center;flex:none}
+.cgroup.none .cav{background:var(--muted)}
+.cname{font-weight:700;flex:1;min-width:0;overflow-wrap:anywhere}
+.ccount{font-size:11px;color:var(--muted)}
+.tgroup{padding:8px 8px 4px}
+.tgroup+.tgroup{border-top:1px dashed var(--line)}
+.tgroup-h{display:flex;align-items:center;gap:6px;margin-bottom:4px}
+.ttag{font-size:11px;font-weight:700;color:var(--c-sales);background:var(--c-sales-soft);padding:1px 9px;border-radius:99px}
+.tgroup-h.none .ttag{color:var(--muted);background:var(--sunken)}
+.tcount{font-size:11px;color:var(--muted)}
+.tgroup .est-list{margin-left:6px;padding-left:6px;border-left:2px solid var(--c-sales-soft)}
+.tgroup-h.none+.est-list{border-left-color:var(--sunken)}
 .est-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
 .est-list button{width:100%;text-align:left;border:1px solid transparent;background:transparent;padding:7px 10px;display:flex;flex-direction:column;gap:0}
 .est-list button:hover{background:var(--sunken)}
@@ -298,8 +311,6 @@ table.in td input.name{width:100%;min-width:140px}
     <div class="side-box">
       <div class="side-title">キャラクター</div>
       <div class="chips" id="charChips"></div>
-      <div class="side-title">テーマ</div>
-      <div class="chips" id="themeChips"></div>
       <button id="btnList" class="listbtn" data-act="list">商品一覧を見る</button>
       <button id="btnNew" class="primary">＋ 新規作成</button>
       <div class="est-groups" id="estGroups"></div>
@@ -327,7 +338,7 @@ let localOnly=true;
 let kpiObs=null;
 let view=recall("view")==="list"?"list":"edit";
 let charFilter=recall("charFilter")||"";
-let themeFilter=recall("themeFilter")||"";
+let themeFilter="";
 
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -802,16 +813,17 @@ function renderSide(){
   if(charFilter&&!counts[charFilter])charFilter="";
   $("#charChips").innerHTML=`<button class="chip" data-filter="" aria-pressed="${!charFilter}">すべて<span class="cnt">${all.length}</span></button>`+chars.map(c=>`<button class="chip" data-filter="${esc(c)}" aria-pressed="${charFilter===c}">${esc(c)}<span class="cnt">${counts[c]}</span></button>`).join("");
   const byChar=all.filter(v=>!charFilter||charOf(v.d)===charFilter);
-  const tcounts={};for(const v of byChar){const t=themeOf(v.d);tcounts[t]=(tcounts[t]||0)+1}
-  const themes=sortKeys(tcounts,NOTHEME);
-  if(themeFilter&&!tcounts[themeFilter])themeFilter="";
-  $("#themeChips").innerHTML=`<button class="chip" data-tfilter="" aria-pressed="${!themeFilter}">すべて<span class="cnt">${byChar.length}</span></button>`+themes.map(t=>`<button class="chip" data-tfilter="${esc(t)}" aria-pressed="${themeFilter===t}">${esc(t)}<span class="cnt">${tcounts[t]}</span></button>`).join("");
   const view=byChar.filter(v=>!themeFilter||themeOf(v.d)===themeFilter);
   const item=v=>`<li><button data-open="${esc(v.id)}"${v.id===curId?' aria-current="true"':""}><span class="nm">${esc(titleOf(v.d))}</span><span class="dt">${v.d.updatedAt?"更新 "+fmtDate(v.d.updatedAt):"未保存"}</span></button></li>`;
   $("#estGroups").innerHTML=view.length?chars.filter(c=>view.some(v=>charOf(v.d)===c)).map(c=>{
     const inC=view.filter(v=>charOf(v.d)===c);
     const ts=sortKeys(Object.fromEntries(inC.map(v=>[themeOf(v.d),1])),NOTHEME);
-    return `<div><div class="grp-h">${esc(c)}</div>${ts.map(t=>`<div class="grp-t">${esc(t)}</div><ul class="est-list">${inC.filter(v=>themeOf(v.d)===t).map(item).join("")}</ul>`).join("")}</div>`;
+    return `<section class="cgroup${c===NOCHAR?" none":""}">
+      <div class="cgroup-h"><span class="cav" aria-hidden="true">${esc([...c][0]||"?")}</span><span class="cname">${esc(c)}</span><span class="ccount">${inC.length}件</span></div>
+      ${ts.map(t=>{const inT=inC.filter(v=>themeOf(v.d)===t);return `<div class="tgroup">
+        <div class="tgroup-h${t===NOTHEME?" none":""}"><span class="ttag">${esc(t)}</span><span class="tcount">${inT.length}</span></div>
+        <ul class="est-list">${inT.map(item).join("")}</ul></div>`}).join("")}
+    </section>`;
   }).join(""):`<p class="small muted">まだありません</p>`;
   // theme suggestions follow the character being edited
   const curChar=doc?charOf(doc):"";
