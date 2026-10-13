@@ -97,6 +97,7 @@ input:disabled,select:disabled{background:var(--sunken)}
 .est-groups{display:flex;flex-direction:column;gap:10px;max-height:380px;overflow:auto}
 .grp-h{font-size:12px;font-weight:700;color:var(--brand);display:flex;align-items:center;gap:6px;padding:0 4px}
 .grp-h::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--brand)}
+.grp-t{font-size:11px;font-weight:700;color:var(--c-sales);padding:4px 4px 0 18px}
 .est-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
 .est-list button{width:100%;text-align:left;border:1px solid transparent;background:transparent;padding:7px 10px;display:flex;flex-direction:column;gap:0}
 .est-list button:hover{background:var(--sunken)}
@@ -295,10 +296,10 @@ table.in td input.name{width:100%;min-width:140px}
 <div class="layout">
   <aside class="side">
     <div class="side-box">
-      <div class="side-title">テーマ</div>
-      <div class="chips" id="themeChips"></div>
       <div class="side-title">キャラクター</div>
       <div class="chips" id="charChips"></div>
+      <div class="side-title">テーマ</div>
+      <div class="chips" id="themeChips"></div>
       <button id="btnList" class="listbtn" data-act="list">商品一覧を見る</button>
       <button id="btnNew" class="primary">＋ 新規作成</button>
       <div class="est-groups" id="estGroups"></div>
@@ -540,7 +541,7 @@ function renderList(){
   const items=list.length?list:(doc&&!localOnly?[{id:curId,data:doc}]:localOnly&&doc?[{id:curId,data:doc}]:[]);
   const rows=items.filter(e=>{const d=e.id===curId&&doc?doc:e.data;return (!charFilter||charOf(d)===charFilter)&&(!themeFilter||themeOf(d)===themeFilter)})
     .map(e=>({id:e.id,...summarize(e.id===curId&&doc?doc:e.data)}))
-    .sort((a,b)=>charOf(a.d).localeCompare(charOf(b.d),"ja")||titleOf(a.d).localeCompare(titleOf(b.d),"ja"));
+    .sort((a,b)=>charOf(a.d).localeCompare(charOf(b.d),"ja")||themeOf(a.d).localeCompare(themeOf(b.d),"ja")||titleOf(a.d).localeCompare(titleOf(b.d),"ja"));
   const rc=v=>v==null?"":`<span class="rate ${rateCls(v)}">${pct(v)}</span>`;
   // up to two price patterns stacked in each cell, the rest summarised as "他◯パターン"
   const stack=(x,f)=>x.pats.length?x.pats.map(f).join(""):'<span class="muted">—</span>';
@@ -551,19 +552,19 @@ function renderList(){
     <td class="num">${stack(x,p=>`<div class="pl ${cls(p.direct?.profit)}"><b>${p.direct?yen(p.direct.profit):""}</b></div>`)}</td>`;
   m.innerHTML=`
   <section class="listhead">
-    <div><h2>商品一覧</h2><p class="small muted">${[themeFilter&&`テーマ「${esc(themeFilter)}」`,charFilter&&`キャラクター「${esc(charFilter)}」`].filter(Boolean).join("・")||"すべて"}の商品・${rows.length}件。行をクリックすると見積もりを開きます。</p></div>
+    <div><h2>商品一覧</h2><p class="small muted">${[charFilter&&`キャラクター「${esc(charFilter)}」`,themeFilter&&`テーマ「${esc(themeFilter)}」`].filter(Boolean).join("・")||"すべて"}の商品・${rows.length}件。行をクリックすると見積もりを開きます。</p></div>
   </section>
   ${rows.length?`<div class="tbl-wrap listwrap"><table class="plist">
     <thead>
-      <tr><th rowspan="2">商品名</th><th rowspan="2">テーマ</th><th rowspan="2">キャラクター</th><th rowspan="2" class="r">サイズ</th><th rowspan="2" class="r">製造数<span class="sub">日本 / 中国</span></th>
+      <tr><th rowspan="2">商品名</th><th rowspan="2">キャラクター</th><th rowspan="2">テーマ</th><th rowspan="2" class="r">サイズ</th><th rowspan="2" class="r">製造数<span class="sub">日本 / 中国</span></th>
         <th colspan="4" class="mh jp">日本販売</th><th colspan="4" class="mh cn">中国販売</th></tr>
       <tr><th class="r jp">原価/個</th><th class="r jp">販売価格</th><th class="jp">原価率</th><th class="r jp">利益/個</th>
         <th class="r cn">原価/個</th><th class="r cn">販売価格</th><th class="cn">原価率</th><th class="r cn">利益/個</th></tr>
     </thead>
     <tbody>${rows.map(r=>`<tr data-open="${esc(r.id)}" tabindex="0">
       <td><b>${esc(titleOf(r.d))}</b></td>
-      <td>${r.d.theme&&String(r.d.theme).trim()?`<span class="themetag">${esc(String(r.d.theme).trim())}</span>`:'<span class="muted">—</span>'}</td>
       <td><span class="chartag">${esc(charOf(r.d))}</span></td>
+      <td>${r.d.theme&&String(r.d.theme).trim()?`<span class="themetag">${esc(String(r.d.theme).trim())}</span>`:'<span class="muted">—</span>'}</td>
       <td class="num">${has(r.d.size.height)?esc(r.d.size.height)+"cm":"—"}</td>
       <td class="num">${r.jp.qty.toLocaleString()} / ${r.cn.qty.toLocaleString()}</td>
       ${cell(r.jp,"jp")}${cell(r.cn,"cn")}</tr>`).join("")}</tbody>
@@ -791,21 +792,30 @@ function updateOutputs(){
   if(mini)mini.innerHTML=`<strong>${esc(titleOf(doc))}</strong><span class="p"><span class="tag jp">日本 原価</span><b>${yen(R.costJP)}</b></span><span class="p"><span class="tag cn">中国 原価</span><b>${yen(R.costCN)}</b></span>`;
 }
 
+// Hierarchy: キャラクター → テーマ → 商品. Theme chips list only the themes of the chosen character.
 function renderSide(){
   const items=list.length?list:(doc?[{id:curId,data:doc}]:[]);
   const all=items.map(e=>({id:e.id,d:e.id===curId&&doc?doc:e.data}));
-  const tcounts={};for(const v of all){const t=themeOf(v.d);tcounts[t]=(tcounts[t]||0)+1}
-  const themes=Object.keys(tcounts).sort((a,b)=>a===NOTHEME?1:b===NOTHEME?-1:a.localeCompare(b,"ja"));
-  if(themeFilter&&!tcounts[themeFilter])themeFilter="";
-  $("#themeChips").innerHTML=`<button class="chip" data-tfilter="" aria-pressed="${!themeFilter}">すべて<span class="cnt">${all.length}</span></button>`+themes.map(t=>`<button class="chip" data-tfilter="${esc(t)}" aria-pressed="${themeFilter===t}">${esc(t)}<span class="cnt">${tcounts[t]}</span></button>`).join("");
-  const view=all.filter(v=>!themeFilter||themeOf(v.d)===themeFilter);
-  const counts={};for(const v of view){const c=charOf(v.d);counts[c]=(counts[c]||0)+1}
-  const chars=Object.keys(counts).sort((a,b)=>a===NOCHAR?1:b===NOCHAR?-1:a.localeCompare(b,"ja"));
+  const sortKeys=(obj,none)=>Object.keys(obj).sort((a,b)=>a===none?1:b===none?-1:a.localeCompare(b,"ja"));
+  const counts={};for(const v of all){const c=charOf(v.d);counts[c]=(counts[c]||0)+1}
+  const chars=sortKeys(counts,NOCHAR);
   if(charFilter&&!counts[charFilter])charFilter="";
-  $("#charChips").innerHTML=`<button class="chip" data-filter="" aria-pressed="${!charFilter}">すべて<span class="cnt">${view.length}</span></button>`+chars.map(c=>`<button class="chip" data-filter="${esc(c)}" aria-pressed="${charFilter===c}">${esc(c)}<span class="cnt">${counts[c]}</span></button>`).join("");
-  const shown=chars.filter(c=>!charFilter||c===charFilter);
-  $("#estGroups").innerHTML=view.length?shown.map(c=>`<div><div class="grp-h">${esc(c)}</div><ul class="est-list">${view.filter(v=>charOf(v.d)===c).map(v=>`<li><button data-open="${esc(v.id)}"${v.id===curId?' aria-current="true"':""}><span class="nm">${esc(titleOf(v.d))}</span><span class="dt">${v.d.updatedAt?"更新 "+fmtDate(v.d.updatedAt):"未保存"}</span></button></li>`).join("")}</ul></div>`).join(""):`<p class="small muted">まだありません</p>`;
-  $("#themeOptions").innerHTML=[...new Set(all.map(v=>String(v.d.theme||"").trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"ja")).map(t=>`<option value="${esc(t)}"></option>`).join("");
+  $("#charChips").innerHTML=`<button class="chip" data-filter="" aria-pressed="${!charFilter}">すべて<span class="cnt">${all.length}</span></button>`+chars.map(c=>`<button class="chip" data-filter="${esc(c)}" aria-pressed="${charFilter===c}">${esc(c)}<span class="cnt">${counts[c]}</span></button>`).join("");
+  const byChar=all.filter(v=>!charFilter||charOf(v.d)===charFilter);
+  const tcounts={};for(const v of byChar){const t=themeOf(v.d);tcounts[t]=(tcounts[t]||0)+1}
+  const themes=sortKeys(tcounts,NOTHEME);
+  if(themeFilter&&!tcounts[themeFilter])themeFilter="";
+  $("#themeChips").innerHTML=`<button class="chip" data-tfilter="" aria-pressed="${!themeFilter}">すべて<span class="cnt">${byChar.length}</span></button>`+themes.map(t=>`<button class="chip" data-tfilter="${esc(t)}" aria-pressed="${themeFilter===t}">${esc(t)}<span class="cnt">${tcounts[t]}</span></button>`).join("");
+  const view=byChar.filter(v=>!themeFilter||themeOf(v.d)===themeFilter);
+  const item=v=>`<li><button data-open="${esc(v.id)}"${v.id===curId?' aria-current="true"':""}><span class="nm">${esc(titleOf(v.d))}</span><span class="dt">${v.d.updatedAt?"更新 "+fmtDate(v.d.updatedAt):"未保存"}</span></button></li>`;
+  $("#estGroups").innerHTML=view.length?chars.filter(c=>view.some(v=>charOf(v.d)===c)).map(c=>{
+    const inC=view.filter(v=>charOf(v.d)===c);
+    const ts=sortKeys(Object.fromEntries(inC.map(v=>[themeOf(v.d),1])),NOTHEME);
+    return `<div><div class="grp-h">${esc(c)}</div>${ts.map(t=>`<div class="grp-t">${esc(t)}</div><ul class="est-list">${inC.filter(v=>themeOf(v.d)===t).map(item).join("")}</ul>`).join("")}</div>`;
+  }).join(""):`<p class="small muted">まだありません</p>`;
+  // theme suggestions follow the character being edited
+  const curChar=doc?charOf(doc):"";
+  $("#themeOptions").innerHTML=[...new Set(all.filter(v=>!doc||charOf(v.d)===curChar).map(v=>String(v.d.theme||"").trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"ja")).map(t=>`<option value="${esc(t)}"></option>`).join("");
   $("#charOptions").innerHTML=chars.filter(c=>c!==NOCHAR).map(c=>`<option value="${esc(c)}"></option>`).join("");
   $("#btnNew").disabled=!canWrite;
 }
@@ -830,7 +840,7 @@ document.addEventListener("input",e=>{
   if(am&&doc.logistics[+am[1]].intlRow)doc.logistics[+am[1]].auto=v==null;
   if((t.tagName==="SELECT"&&p.endsWith(".target"))||p==="intl.service")render();
   else updateOutputs();
-  if(p==="name"||p==="theme"||p==="size.height")renderSide();
+  if(p==="name"||p==="theme"||p==="size.height"||p==="character")renderSide();
   touch();
 });
 document.addEventListener("change",e=>{if(e.target.dataset?.path==="character")renderSide()});
@@ -838,7 +848,7 @@ document.addEventListener("click",async e=>{
   const tf=e.target.closest("[data-tfilter]");
   if(tf){themeFilter=tf.dataset.tfilter;remember("themeFilter",themeFilter);if(view==="list")render();else renderSide();return}
   const f=e.target.closest("[data-filter]");
-  if(f){charFilter=f.dataset.filter;remember("charFilter",charFilter);if(view==="list")render();else renderSide();return}
+  if(f){charFilter=f.dataset.filter;remember("charFilter",charFilter);themeFilter="";remember("themeFilter","");if(view==="list")render();else renderSide();return}
   const o=e.target.closest("[data-open]");
   if(o){await openExisting(o.dataset.open);return}
   const b=e.target.closest("[data-act]");if(!b||b.disabled)return;
