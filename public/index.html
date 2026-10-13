@@ -338,7 +338,7 @@ const charOf=d=>(d&&String(d.character||"").trim())||NOCHAR;
 function newDoc(fx){
   return {
     name:"",character:charFilter&&charFilter!==NOCHAR?charFilter:"",memo:"",
-    fx:{CNY:fx.CNY,USD:fx.USD},
+    fx:{CNY:fx.CNY,USD:fx.USD,auto:true},
     lossRate:5,dutyRate:0,importTaxRate:10,
     qty:{jpOff:null,jpOn:null,cnOff:null,cnOn:null},
     size:{height:null,weightG:null,ratioW:0.7,ratioD:0.5,compress:0},
@@ -366,6 +366,8 @@ function normalize(d){
   const o={...b,...d};
   o.character=d.character||"";
   o.fx={...b.fx,...(d.fx||{})};
+  // auto: the estimate follows the latest shared TTM rate; typing a rate switches it to manual
+  if(o.fx.auto!==false){o.fx.auto=true;o.fx.CNY=n(commonFx.CNY);o.fx.USD=n(commonFx.USD)}
   let q=d.qty||(Array.isArray(d.patterns)&&d.patterns[0]?{jp:d.patterns[0].jp,cn:d.patterns[0].cn}:null);
   if(q&&q.jpOff===undefined&&(q.jp!==undefined||q.cn!==undefined))q={jpOff:q.jp??null,jpOn:null,cnOff:q.cn??null,cnOn:null};
   o.qty={...b.qty,...(q||{})};
@@ -595,7 +597,7 @@ function render(){
   </section>
 
   <section class="card cat-basic" id="s-basic">
-    ${cardHead(1,"基本設定・為替","為替レート・ロス率・関税率は、この見積もりだけに使われます")}
+    ${cardHead(1,"基本設定・為替","為替レートは最新のTTM（三菱UFJ銀行の公表仲値）に自動で連動します。書き換えると、その見積もりだけ手入力のレートになります")}
     <div class="fields">
       <div class="field"><label>1元あたり</label><div class="row">${numIn("fx.CNY",d.fx.CNY,"人民元レート")}<span class="unit">円</span></div></div>
       <div class="field"><label>1ドルあたり</label><div class="row">${numIn("fx.USD",d.fx.USD,"ドルレート")}<span class="unit">円</span></div></div>
@@ -746,9 +748,8 @@ function updateOutputs(){
   s.cn.prices.forEach((p,i)=>set("cnPrice"+i,has(p.price)?yen0(n(p.price)*n(doc.fx.CNY)):"—"));
   const fn=$("#fxNote");
   if(fn){
-    const diff=n(doc.fx.CNY)!==n(commonFx.CNY)||n(doc.fx.USD)!==n(commonFx.USD);
-    fn.innerHTML=`<span>社内共通レート：<b>1元 = ${esc(commonFx.CNY)}円</b> / <b>1ドル = ${esc(commonFx.USD)}円</b> <span class="muted">（${esc(commonFx.updatedAt||"")} ${esc(commonFx.note||"")}）</span></span>
-      ${canWrite?`<button data-act="applyFx"${diff?"":" disabled"}>共通レートを反映</button><button data-act="saveFx"${diff?"":" disabled"}>このレートを共通にする</button>`:""}`;
+    fn.innerHTML=`<span>最新レート：<b>1元 = ${esc(commonFx.CNY)}円</b> / <b>1ドル = ${esc(commonFx.USD)}円</b> <span class="muted">（${esc(commonFx.note||"")} ${esc(commonFx.updatedAt||"")}）</span></span>
+      ${doc.fx.auto?`<span class="autobadge">最新レートに自動連動</span>`:`<span class="small muted">この見積もりは手入力のレートを使用中</span>${canWrite?`<button data-act="applyFx">最新レートに戻す</button>`:""}`}`;
   }
   // summary per market
   const sb=$("#sumBody");
@@ -802,6 +803,7 @@ document.addEventListener("input",e=>{
   setPath(doc,t.dataset.path,v);
   const p=t.dataset.path;
   if(p==="intl.service"&&SERVICES[v])doc.intl.fuel=SERVICES[v].fuel;
+  if(p==="fx.CNY"||p==="fx.USD")doc.fx.auto=false;
   const sm=p.match(/^sales\.(jp|cn)\.consign\.(\d+)\.shop$/);
   if(sm){const row=doc.sales[sm[1]].consign[+sm[2]],hit=knownShops(sm[1]).find(([k])=>k===String(v).trim());
     if(hit&&!has(row.rate)){row.rate=hit[1];const ri=document.querySelector(`[data-path="sales.${sm[1]}.consign.${sm[2]}.rate"]`);if(ri)ri.value=hit[1]}}
@@ -839,8 +841,7 @@ document.addEventListener("click",async e=>{
   if(a==="addRate"){const r=doc.sales[b.dataset.m].consign;r.push({shop:"",rate:null});render();touch();const ins=document.querySelectorAll(`[data-path^="sales.${b.dataset.m}.consign."][data-path$=".shop"]`);if(ins.length)ins[ins.length-1].focus();return}
   if(a==="delRate"){doc.sales[b.dataset.m].consign.splice(+b.dataset.i,1);render();touch();return}
   if(a==="delPrice"){doc.sales[b.dataset.m].prices.splice(+b.dataset.i,1);render();touch()}
-  if(a==="applyFx"){doc.fx={CNY:n(commonFx.CNY),USD:n(commonFx.USD)};render();touch()}
-  if(a==="saveFx")saveCommonFx();
+  if(a==="applyFx"){doc.fx={CNY:n(commonFx.CNY),USD:n(commonFx.USD),auto:true};render();touch()}
 });
 $("#btnNew").addEventListener("click",createNew);
 document.addEventListener("keydown",e=>{const r=e.target.closest&&e.target.closest("tr[data-open]");if(r&&(e.key==="Enter"||e.key===" ")){e.preventDefault();openExisting(r.dataset.open)}});
@@ -893,11 +894,6 @@ async function removeCurrent(){
   if(list.length){curId=list[0].id;doc=normalize(JSON.parse(JSON.stringify(list[0].data)))}else{curId=null;doc=null}
   render();
 }
-async function saveCommonFx(){
-  commonFx={CNY:n(doc.fx.CNY),USD:n(doc.fx.USD),updatedAt:today(),note:"手動更新"};
-  updateOutputs();
-  if(db&&!localOnly){try{await db.doc("settings/fx").set(commonFx);setStatus("共通レートを更新しました")}catch(e){setStatus("共通レートを保存できませんでした","err")}}
-}
 function remember(k,v){try{localStorage.setItem(k,v||"")}catch(e){}}
 function recall(k){try{return localStorage.getItem(k)}catch(e){return null}}
 
@@ -915,7 +911,15 @@ render();
   db={collection:p=>fs.collection(p),doc:p=>fs.doc(p)};
   localOnly=false;
   setStatus("読み込み中…","busy");
-  db.doc("settings/fx").onSnapshot(s=>{if(s.exists){commonFx={...DEFAULT_FX,...s.data()};updateOutputs()}},()=>{});
+  db.doc("settings/fx").onSnapshot(s=>{
+    if(!s.exists)return;
+    commonFx={...DEFAULT_FX,...s.data()};
+    if(doc&&doc.fx.auto){
+      doc.fx.CNY=n(commonFx.CNY);doc.fx.USD=n(commonFx.USD);
+      for(const k of ["CNY","USD"]){const i=document.querySelector(`[data-path="fx.${k}"]`);if(i&&document.activeElement!==i)i.value=doc.fx[k]}
+    }
+    if(view==="list")render();else updateOutputs();
+  },()=>{});
   let first=true;
   db.collection("estimates").orderBy("updatedAt","desc").onSnapshot(snap=>{
     list=snap.docs.filter(x=>x.exists).map(x=>({id:x.id,data:x.data()}));

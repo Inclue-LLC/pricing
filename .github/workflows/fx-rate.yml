@@ -1,0 +1,20 @@
+name: 為替レート（TTM）更新
+
+on:
+  schedule:
+    # 平日 12:05 JST（三菱UFJ銀行の公表は 10〜11時ごろ）
+    - cron: "5 3 * * 1-5"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: node scripts/update-fx.mjs
