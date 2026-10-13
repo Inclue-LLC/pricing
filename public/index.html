@@ -819,7 +819,7 @@ function renderSide(){
     const inC=view.filter(v=>charOf(v.d)===c);
     const ts=sortKeys(Object.fromEntries(inC.map(v=>[themeOf(v.d),1])),NOTHEME);
     return `<section class="cgroup${c===NOCHAR?" none":""}">
-      <div class="cgroup-h"><span class="cav" aria-hidden="true">${esc([...c][0]||"?")}</span><span class="cname">${esc(c)}</span><span class="ccount">${inC.length}件</span></div>
+      <div class="cgroup-h"><span class="cname">${esc(c)}</span><span class="ccount">${inC.length}件</span></div>
       ${ts.map(t=>{const inT=inC.filter(v=>themeOf(v.d)===t);return `<div class="tgroup">
         <div class="tgroup-h${t===NOTHEME?" none":""}"><span class="ttag">${esc(t)}</span><span class="tcount">${inT.length}</span></div>
         <ul class="est-list">${inT.map(item).join("")}</ul></div>`}).join("")}
