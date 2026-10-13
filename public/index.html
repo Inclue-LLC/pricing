@@ -136,7 +136,7 @@ main{display:flex;flex-direction:column;gap:22px;min-width:0}
 .infocard .grow{flex:1;min-width:240px}
 .infocard label{font-size:12px;font-weight:700;color:var(--brand)}
 .title-in{font-family:var(--font-display);font-size:22px;font-weight:700;padding:8px 12px;width:100%}
-.info-grid{display:grid;grid-template-columns:minmax(200px,1fr) minmax(200px,2fr);gap:12px}
+.info-grid{display:grid;grid-template-columns:minmax(200px,2fr) minmax(160px,1fr);gap:12px}
 .info-grid input{width:100%}
 .edit-hint{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#FFF7DC;border:1px dashed var(--input-line);border-radius:10px;padding:9px 14px;font-size:13px}
 .edit-hint .sw{display:inline-block;width:46px;height:22px;border-radius:6px;background:var(--input-bg);border:1.5px solid var(--input-line);flex:none}
@@ -572,15 +572,15 @@ function render(){
   <div id="modeNote" class="notice" hidden></div>
   <section class="infocard">
     <div class="titlerow">
-      <div class="field grow"><label for="f-name">商品名</label><input id="f-name" class="title-in" data-path="name" value="${esc(d.name)}" placeholder="商品名を入力（例：くま 20cm）"></div>
+      <div class="field grow"><label for="f-name">商品名</label><input id="f-name" class="title-in" data-path="name" value="${esc(d.name)}" placeholder="入力"></div>
       <div class="actions">
         <button data-act="dup">複製</button>
         ${pendingDelete?`<span class="confirm">削除しますか？ <button class="danger" data-act="delYes">削除する</button><button data-act="delNo">やめる</button></span>`:`<button class="danger" data-act="delAsk">削除</button>`}
       </div>
     </div>
     <div class="info-grid">
-      <div class="field"><label for="f-char">キャラクター</label><input id="f-char" data-path="character" value="${esc(d.character)}" list="charOptions" placeholder="例：くまのモコ"></div>
-      <div class="field"><label for="f-memo">メモ</label><input id="f-memo" data-path="memo" value="${esc(d.memo)}" placeholder="工場名、仕様など"></div>
+      <div class="field"><label for="f-char">キャラクター</label><input id="f-char" data-path="character" value="${esc(d.character)}" list="charOptions" placeholder="入力"></div>
+      <div class="field"><label for="f-size">サイズ</label><div class="row">${numIn("size.height",d.size.height,"サイズ").replace("<input ",'<input id="f-size" ')}<span class="unit">cm</span></div></div>
     </div>
     <div class="meta" id="metaLine">${d.updatedAt?`最終更新 ${fmtDate(d.updatedAt)}`:""}</div>
   </section>
@@ -607,7 +607,7 @@ function render(){
   </section>
 
   <section class="card cat-qty" id="s-qty">
-    ${cardHead(2,"製造数量・サイズ","日本・中国それぞれ、オフライン販売分とオンライン販売分を分けて入力します。サイズ（高さ）は国際送料の計算に使います")}
+    ${cardHead(2,"製造数量","日本・中国それぞれ、オフライン販売分とオンライン販売分を分けて入力します")}
     <div class="qtybox">
       ${[["jp","日本販売分"],["cn","中国販売分"]].map(([mk,l])=>`<div class="field ${mk} mkt">
         <span class="lbl"><span class="tag ${mk}">${l}</span></span>
@@ -616,7 +616,6 @@ function render(){
         <div class="qsub">小計 <b data-out="${mk}Sub"></b></div>
       </div>`).join("")}
       <div class="field tot"><span class="lbl">合計 / 良品数（ロス率反映）</span><span class="big" data-out="qtyTot"></span></div>
-      <div class="field size"><label>サイズ</label><div class="row">${numIn("size.height",d.size.height,"サイズ")}<span class="unit">cm</span></div></div>
     </div>
   </section>
 
