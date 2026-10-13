@@ -340,7 +340,7 @@ function newDoc(fx){
     name:"",character:charFilter&&charFilter!==NOCHAR?charFilter:"",memo:"",
     fx:{CNY:fx.CNY,USD:fx.USD},
     lossRate:5,dutyRate:0,importTaxRate:10,
-    qty:{jpOff:200,jpOn:100,cnOff:100,cnOn:100},
+    qty:{jpOff:null,jpOn:null,cnOff:null,cnOn:null},
     size:{height:null,weightG:null,ratioW:0.7,ratioD:0.5,compress:0},
     intl:{service:"m_cn_eco",fuel:41.5,shipments:1,customs:0},
     mfg:[
@@ -759,7 +759,7 @@ function updateOutputs(){
     const bar=cost>0?`<div class="bar" role="img" aria-label="原価の内訳">${seg.filter(x=>x[1]>0).map(([k,v,l])=>`<span class="${k}" style="width:${(v/cost*100).toFixed(2)}%" title="${l} ${yen(v)}"></span>`).join("")}</div>`:`<div class="bar"></div>`;
     const cnyNote=mk==="cn"&&cost!=null&&n(doc.fx.CNY)?`${(cost/n(doc.fx.CNY)).toFixed(2)}元`:(mk==="jp"&&(R.dutyPc+R.taxPc+R.feePc)?`うち関税・輸入消費税・立替手数料 ${yen(R.dutyPc+R.taxPc+R.feePc)}`:"");
     const pats=doc.sales[mk].prices.map((p,i)=>({label:`パターン${i+1}`,ch:channels(mk,cost,p.price)})).filter(x=>x.ch);
-    const body=!pats.length?`<div class="hint">販売価格を入れると、自社販売・委託販売・オンライン販売の原価率と利益が表示されます。</div>`:cost==null?`<div class="hint">製造数量が0のため計算できません。</div>`:
+    const body=!pats.length?`<div class="hint">販売価格を入れると、自社販売・委託販売・オンライン販売の原価率と利益が表示されます。</div>`:cost==null?`<div class="hint">製造数量を入力すると、原価率と利益が計算されます。</div>`:
       pats.map(({label,ch})=>`<div class="pblock">
         <div class="pblock-h"><span class="pname">${esc(label)}</span><span class="pval">${yen0(ch.price)}</span><span class="small muted">${mk==="cn"?`${ch.local.toLocaleString("ja-JP",{maximumFractionDigits:2})}元`:`税込 ${yen0(ch.price*1.1)}`}</span></div>
         <table class="chtbl"><thead><tr><th>販売方法</th><th>手取り / 個</th><th>原価率</th><th>利益 / 個</th></tr></thead><tbody>
