@@ -203,6 +203,15 @@ main{display:flex;flex-direction:column;gap:22px;min-width:0}
 .pblock-h{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;padding-bottom:6px;border-bottom:2px solid var(--c-sales-soft)}
 .pname{font-size:12px;font-weight:700;color:var(--c-sales);background:var(--c-sales-soft);padding:1px 10px;border-radius:99px}
 .pval{font-size:18px;font-weight:700;font-variant-numeric:tabular-nums}
+.st{border-top:2px solid var(--line);padding-top:12px;display:flex;flex-direction:column;gap:8px}
+.st-h{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap}
+.st-h b{font-size:14px}
+.be{font-size:12px;font-weight:700;color:var(--good);background:#E3F4EA;padding:2px 10px;border-radius:99px}
+.be.ng{color:var(--bad);background:#FBE3E3}
+.st-ctl{display:flex;flex-wrap:wrap;gap:8px 14px;font-size:12px;color:var(--muted)}
+.st-ctl label{display:flex;align-items:center;gap:6px}
+.st-ctl select{font-size:12px;padding:3px 6px}
+.st-t tr.loss td{background:#FDF3F3}
 .hint{font-size:12px;color:var(--muted);background:var(--sunken);border-radius:8px;padding:8px 10px}
 
 .mini{position:sticky;top:64px;z-index:10;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:8px 14px;display:flex;gap:6px 18px;flex-wrap:wrap;align-items:center;font-size:13px}
@@ -345,7 +354,7 @@ const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&
 const uid=()=>"e"+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const n=v=>{const x=parseFloat(v);return isFinite(x)?x:0};
 const has=v=>v!=null&&v!==""&&isFinite(parseFloat(v));
-const yen=(v,d=1)=>v==null||!isFinite(v)?"—":"¥"+v.toLocaleString("ja-JP",{minimumFractionDigits:d,maximumFractionDigits:d});
+const yen=(v,d=1)=>v==null||!isFinite(v)?"—":(v<0?"-":"")+"¥"+Math.abs(v).toLocaleString("ja-JP",{minimumFractionDigits:d,maximumFractionDigits:d});
 const yen0=v=>yen(v,0);
 const pct=v=>v==null||!isFinite(v)?"—":(v*100).toFixed(1)+"%";
 const cls=v=>v==null||!isFinite(v)?"":(v<0?"neg":"pos");
@@ -423,6 +432,7 @@ function normalize(d){
     delete x.consignRates;
   }
   delete o.consignRates;
+  o.sell={jp:{pattern:0,off:"direct",...(d.sell?.jp||{})},cn:{pattern:0,off:"direct",...(d.sell?.cn||{})}};
   for(const k of ["patterns","materials","processing","initial","wsRates"])delete o[k];
   return o;
 }
@@ -721,6 +731,43 @@ function render(){
   }
 }
 
+// Sell-through: the whole lot is paid for up front, so profit = net sales of what sells − cost of the whole lot.
+// Offline units sell through the chosen offline method (自社販売 or a consignment shop), online units through オンライン販売.
+const SELL_RATES=[0.5,0.6,0.7,0.8,0.9,1];
+function sellThrough(mk,R){
+  const st=doc.sell[mk],prices=doc.sales[mk].prices;
+  const pi=Math.min(Math.max(0,Math.round(n(st.pattern))),prices.length-1);
+  const cost=mk==="jp"?R.costJP:R.costCN,good=mk==="jp"?R.gJ:R.gC;
+  if(cost==null||!has(prices[pi]?.price))return null;
+  const ch=channels(mk,cost,prices[pi].price);
+  const consign=ch.list.filter(c=>c.key==="consign");
+  const ci=/^c\d+$/.test(st.off)?+st.off.slice(1):-1;
+  const off=ci>=0&&consign[ci]?consign[ci]:ch.list.find(c=>c.key==="direct");
+  const on=ch.list.find(c=>c.key==="online");
+  const keep=1-n(doc.lossRate)/100;
+  const offGood=n(doc.qty[mk+"Off"])*keep,onGood=n(doc.qty[mk+"On"])*keep;
+  const lotCost=cost*good,full=offGood*off.net+onGood*on.net;
+  return {pi,ci:consign[ci]?ci:-1,consign,lotCost,full,breakeven:full>0?lotCost/full:null,
+    rows:SELL_RATES.map(r=>{const rev=full*r,pr=rev-lotCost;return {r,sold:(offGood+onGood)*r,rev,profit:pr,margin:rev>0?pr/rev:null}})};
+}
+function sellBlock(mk,R){
+  const S=sellThrough(mk,R);
+  if(!S)return "";
+  const prices=doc.sales[mk].prices,u=mk==="cn"?"元":"円";
+  const opt=(v,l,sel)=>`<option value="${v}"${sel?" selected":""}>${esc(l)}</option>`;
+  return `<div class="st">
+    <div class="st-h"><b>消化率別の売上・利益</b>${S.breakeven!=null?`<span class="be${S.breakeven>1?" ng":""}">損益分岐の消化率 ${S.breakeven>1?"100%超（完売しても赤字）":pct(S.breakeven)}</span>`:""}</div>
+    <div class="st-ctl">
+      <label>販売価格 <select data-path="sell.${mk}.pattern">${prices.map((p,i)=>has(p.price)?opt(i,`パターン${i+1}（${n(p.price).toLocaleString()}${u}）`,i===S.pi):"").join("")}</select></label>
+      <label>オフライン分の販売方法 <select data-path="sell.${mk}.off">${opt("direct","自社販売",S.ci<0)}${S.consign.map((c,i)=>opt("c"+i,"委託販売 "+c.sub,i===S.ci)).join("")}</select></label>
+    </div>
+    ${S.full>0?`<table class="chtbl st-t"><thead><tr><th>消化率</th><th>販売数</th><th>売上（手取り）</th><th>利益</th><th>利益率</th></tr></thead><tbody>
+      ${S.rows.map(x=>`<tr${x.profit<0?' class="loss"':""}><td><b>${Math.round(x.r*100)}%</b></td><td class="num">${Math.round(x.sold).toLocaleString()}個</td><td class="num">${yen0(x.rev)}</td><td class="num ${cls(x.profit)}"><b>${yen0(x.profit)}</b></td><td class="num ${cls(x.margin)}">${pct(x.margin)}</td></tr>`).join("")}
+    </tbody></table>
+    <p class="small muted">製造ロット全体の原価 ${yen0(S.lotCost)} を差し引いた利益です。オフライン分は選んだ販売方法、オンライン分はオンライン販売の手取りで計算しています。</p>`
+    :`<div class="hint">オフライン販売分・オンライン販売分の製造数量を入れると表示されます。</div>`}
+  </div>`;
+}
 function rateCls(r){if(r==null)return"";return r<=0.4?"ok":r<=0.6?"mid":"hi"}
 function updateOutputs(){
   if(!doc)return;
@@ -797,6 +844,7 @@ function updateOutputs(){
           <div class="fig cost"><span class="lb">原価 / 個</span><span class="v">${yen(cost)}</span>${bar}<span class="u">${cnyNote}</span></div>
         </div>
         ${body}
+        ${sellBlock(mk,R)}
       </div></div>`;
   }).join("");
   const mini=$("#mini");
