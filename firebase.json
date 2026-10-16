@@ -1,14 +1,27 @@
 {
   "hosting": {
+    "site": "inclue-pricing",
     "public": "public",
-    "ignore": ["firebase.json", "**/.*"],
+    "ignore": [
+      "firebase.json",
+      "**/.*"
+    ],
     "headers": [
       {
         "source": "**",
         "headers": [
-          { "key": "X-Robots-Tag", "value": "noindex, nofollow" },
-          { "key": "Referrer-Policy", "value": "no-referrer" },
-          { "key": "Cache-Control", "value": "no-cache" }
+          {
+            "key": "X-Robots-Tag",
+            "value": "noindex, nofollow"
+          },
+          {
+            "key": "Referrer-Policy",
+            "value": "no-referrer"
+          },
+          {
+            "key": "Cache-Control",
+            "value": "no-cache"
+          }
         ]
       }
     ]
