@@ -553,6 +553,10 @@ function intlPanel(d){
     <div class="intl-res" id="intlRes"></div>
   </div>`;
 }
+// Sidebar order, shared with the product list: character → theme (unset ones last) → manual order (unordered first).
+const nameCmp=(a,b,none)=>a===b?0:a===none?1:b===none?-1:a.localeCompare(b,"ja");
+const ordKeyOf=d=>{const o=d?.order;return o!=null&&o!==""&&isFinite(+o)?+o:-1e15};
+const sideCmp=(a,b)=>nameCmp(charOf(a),charOf(b),NOCHAR)||nameCmp(themeOf(a),themeOf(b),NOTHEME)||ordKeyOf(a)-ordKeyOf(b);
 // Evaluate another estimate with the same calc code (calc/channels read the global doc).
 function summarize(data){
   const saved=doc;
@@ -571,8 +575,8 @@ function renderList(){
   const m=$("#main");
   const items=list.length?list:(doc&&!localOnly?[{id:curId,data:doc}]:localOnly&&doc?[{id:curId,data:doc}]:[]);
   const rows=items.filter(e=>{const d=e.id===curId&&doc?doc:e.data;return (!charFilter||charOf(d)===charFilter)&&(!themeFilter||themeOf(d)===themeFilter)})
-    .map(e=>({id:e.id,...summarize(e.id===curId&&doc?doc:e.data)}))
-    .sort((a,b)=>charOf(a.d).localeCompare(charOf(b.d),"ja")||themeOf(a.d).localeCompare(themeOf(b.d),"ja")||titleOf(a.d).localeCompare(titleOf(b.d),"ja"));
+    .map((e,i)=>({id:e.id,idx:i,...summarize(e.id===curId&&doc?doc:e.data)}))
+    .sort((a,b)=>sideCmp(a.d,b.d)||a.idx-b.idx);
   const rc=v=>v==null?"":`<span class="rate ${rateCls(v)}">${pct(v)}</span>`;
   // up to two price patterns stacked in each cell, the rest summarised as "他◯パターン"
   const stack=(x,f)=>x.pats.length?x.pats.map(f).join(""):'<span class="muted">—</span>';
@@ -874,8 +878,7 @@ function renderSide(){
   const view=byChar.filter(v=>!themeFilter||themeOf(v.d)===themeFilter);
   const item=(v,g)=>`<li class="ei" data-id="${esc(v.id)}" data-g="${esc(g)}"${canWrite?' draggable="true"':""}><button data-open="${esc(v.id)}"${v.id===curId?' aria-current="true"':""}><span class="nm">${esc(titleOf(v.d))}</span><span class="dt">${v.d.updatedAt?"更新 "+fmtDate(v.d.updatedAt):"未保存"}</span></button>${canWrite?`<span class="mv"><button class="mvb" data-move="up" data-id="${esc(v.id)}" aria-label="上へ移動" title="上へ">▲</button><button class="mvb" data-move="down" data-id="${esc(v.id)}" aria-label="下へ移動" title="下へ">▼</button></span>`:""}</li>`;
   // manual order within a character/theme group; estimates never ordered yet (new ones) come first, newest on top
-  const ordKey=v=>{const o=v.d.order;return o!=null&&o!==""&&isFinite(+o)?+o:-1e15};
-  const ordered=arr=>arr.map((v,i)=>({v,i})).sort((a,b)=>ordKey(a.v)-ordKey(b.v)||a.i-b.i).map(x=>x.v);
+  const ordered=arr=>arr.map((v,i)=>({v,i})).sort((a,b)=>ordKeyOf(a.v.d)-ordKeyOf(b.v.d)||a.i-b.i).map(x=>x.v);
   $("#estGroups").innerHTML=view.length?chars.filter(c=>view.some(v=>charOf(v.d)===c)).map(c=>{
     const inC=view.filter(v=>charOf(v.d)===c);
     const ts=sortKeys(Object.fromEntries(inC.map(v=>[themeOf(v.d),1])),NOTHEME);
