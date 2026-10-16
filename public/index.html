@@ -733,7 +733,7 @@ function render(){
 
 // Sell-through: the whole lot is paid for up front, so profit = net sales of what sells − cost of the whole lot.
 // Offline units sell through the chosen offline method (自社販売 or a consignment shop), online units through オンライン販売.
-const SELL_RATES=[0.5,0.6,0.7,0.8,0.9,1];
+const SELL_RATES=[0.5,0.7,1];
 function sellThrough(mk,R){
   const st=doc.sell[mk],prices=doc.sales[mk].prices;
   const pi=Math.min(Math.max(0,Math.round(n(st.pattern))),prices.length-1);
