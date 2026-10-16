@@ -112,7 +112,17 @@ input:disabled,select:disabled{background:var(--sunken)}
 .tgroup .est-list{margin-left:6px;padding-left:6px;border-left:2px solid var(--c-sales-soft)}
 .tgroup-h.none+.est-list{border-left-color:var(--sunken)}
 .est-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
-.est-list button{width:100%;text-align:left;border:1px solid transparent;background:transparent;padding:7px 10px;display:flex;flex-direction:column;gap:0}
+.est-list button{width:100%;text-align:left;border:1px solid transparent;background:transparent;padding:7px 30px 7px 10px;display:flex;flex-direction:column;gap:0}
+.ei{position:relative}
+.ei[draggable="true"]{cursor:grab}
+.ei.dragging{opacity:.45}
+.ei.drop-before{box-shadow:inset 0 3px 0 var(--brand);border-radius:8px}
+.ei.drop-after{box-shadow:inset 0 -3px 0 var(--brand);border-radius:8px}
+.mv{position:absolute;right:3px;top:50%;transform:translateY(-50%);display:none;flex-direction:column;gap:0}
+.ei:hover .mv,.ei:focus-within .mv{display:flex}
+@media (hover:none){.mv{display:flex}}
+.est-list .mvb{width:auto;padding:1px 6px;font-size:10px;line-height:1.2;color:var(--muted);border:none;background:transparent;display:block}
+.est-list .mvb:hover{color:var(--brand);background:var(--brand-soft)}
 .est-list button:hover{background:var(--sunken)}
 .est-list button[aria-current="true"]{background:var(--brand-soft);border-color:var(--brand)}
 .listbtn{font-weight:700;color:var(--brand);border-color:var(--brand)}
@@ -862,15 +872,18 @@ function renderSide(){
   $("#charChips").innerHTML=`<button class="chip" data-filter="" aria-pressed="${!charFilter}">すべて<span class="cnt">${all.length}</span></button>`+chars.map(c=>`<button class="chip" data-filter="${esc(c)}" aria-pressed="${charFilter===c}">${esc(c)}<span class="cnt">${counts[c]}</span></button>`).join("");
   const byChar=all.filter(v=>!charFilter||charOf(v.d)===charFilter);
   const view=byChar.filter(v=>!themeFilter||themeOf(v.d)===themeFilter);
-  const item=v=>`<li><button data-open="${esc(v.id)}"${v.id===curId?' aria-current="true"':""}><span class="nm">${esc(titleOf(v.d))}</span><span class="dt">${v.d.updatedAt?"更新 "+fmtDate(v.d.updatedAt):"未保存"}</span></button></li>`;
+  const item=(v,g)=>`<li class="ei" data-id="${esc(v.id)}" data-g="${esc(g)}"${canWrite?' draggable="true"':""}><button data-open="${esc(v.id)}"${v.id===curId?' aria-current="true"':""}><span class="nm">${esc(titleOf(v.d))}</span><span class="dt">${v.d.updatedAt?"更新 "+fmtDate(v.d.updatedAt):"未保存"}</span></button>${canWrite?`<span class="mv"><button class="mvb" data-move="up" data-id="${esc(v.id)}" aria-label="上へ移動" title="上へ">▲</button><button class="mvb" data-move="down" data-id="${esc(v.id)}" aria-label="下へ移動" title="下へ">▼</button></span>`:""}</li>`;
+  // manual order within a character/theme group; estimates never ordered yet (new ones) come first, newest on top
+  const ordKey=v=>{const o=v.d.order;return o!=null&&o!==""&&isFinite(+o)?+o:-1e15};
+  const ordered=arr=>arr.map((v,i)=>({v,i})).sort((a,b)=>ordKey(a.v)-ordKey(b.v)||a.i-b.i).map(x=>x.v);
   $("#estGroups").innerHTML=view.length?chars.filter(c=>view.some(v=>charOf(v.d)===c)).map(c=>{
     const inC=view.filter(v=>charOf(v.d)===c);
     const ts=sortKeys(Object.fromEntries(inC.map(v=>[themeOf(v.d),1])),NOTHEME);
     return `<section class="cgroup${c===NOCHAR?" none":""}">
       <div class="cgroup-h"><span class="cname">${esc(c)}</span><span class="ccount">${inC.length}件</span></div>
-      ${ts.map(t=>{const inT=inC.filter(v=>themeOf(v.d)===t);return `<div class="tgroup">
+      ${ts.map(t=>{const inT=ordered(inC.filter(v=>themeOf(v.d)===t)),g=c+"\u0001"+t;return `<div class="tgroup">
         <div class="tgroup-h${t===NOTHEME?" none":""}"><span class="ttag">${esc(t)}</span><span class="tcount">${inT.length}</span></div>
-        <ul class="est-list">${inT.map(item).join("")}</ul></div>`}).join("")}
+        <ul class="est-list">${inT.map(v=>item(v,g)).join("")}</ul></div>`}).join("")}
     </section>`;
   }).join(""):`<p class="small muted">まだありません</p>`;
   // theme suggestions follow the character being edited
@@ -909,6 +922,8 @@ document.addEventListener("click",async e=>{
   if(tf){themeFilter=tf.dataset.tfilter;remember("themeFilter",themeFilter);if(view==="list")render();else renderSide();return}
   const f=e.target.closest("[data-filter]");
   if(f){charFilter=f.dataset.filter;remember("charFilter",charFilter);themeFilter="";remember("themeFilter","");if(view==="list")render();else renderSide();return}
+  const mvb=e.target.closest("[data-move]");
+  if(mvb){moveBy(mvb.dataset.id,mvb.dataset.move==="up"?-1:1);return}
   const o=e.target.closest("[data-open]");
   if(o){await openExisting(o.dataset.open);return}
   const b=e.target.closest("[data-act]");if(!b||b.disabled)return;
@@ -937,6 +952,57 @@ document.addEventListener("click",async e=>{
 $("#btnNew").addEventListener("click",createNew);
 document.addEventListener("keydown",e=>{const r=e.target.closest&&e.target.closest("tr[data-open]");if(r&&(e.key==="Enter"||e.key===" ")){e.preventDefault();openExisting(r.dataset.open)}});
 
+function groupIdsOf(id){
+  const li=[...document.querySelectorAll("#estGroups .ei")].find(x=>x.dataset.id===id);
+  if(!li)return null;
+  return {g:li.dataset.g,ids:[...document.querySelectorAll("#estGroups .ei")].filter(x=>x.dataset.g===li.dataset.g).map(x=>x.dataset.id)};
+}
+async function saveOrder(ids){
+  const changes=[];
+  ids.forEach((id,i)=>{
+    const o=i*10,e=list.find(x=>x.id===id);
+    const cur=id===curId&&doc?doc.order:e?.data?.order;
+    if(cur===o)return;
+    if(e)e.data={...e.data,order:o};
+    if(id===curId&&doc)doc.order=o;
+    changes.push([id,o]);
+  });
+  renderSide();
+  if(!changes.length||!db||localOnly)return;
+  for(const [id,o] of changes){
+    try{await db.collection("estimates").doc(id).update({order:o})}
+    catch(err){setStatus("並び順を保存できませんでした","err");return}
+  }
+  setStatus("並び順を保存しました");
+}
+function moveBy(id,dir){
+  const G=groupIdsOf(id);if(!G)return;
+  const i=G.ids.indexOf(id),j=i+dir;
+  if(j<0||j>=G.ids.length)return;
+  [G.ids[i],G.ids[j]]=[G.ids[j],G.ids[i]];
+  saveOrder(G.ids).then(()=>{const b=document.querySelector(`#estGroups [data-move="${dir<0?"up":"down"}"][data-id="${CSS.escape(id)}"]`);if(b)b.focus()});
+}
+let dragId=null;
+const eg=$("#estGroups");
+eg.addEventListener("dragstart",e=>{const li=e.target.closest&&e.target.closest(".ei");if(!li)return;dragId=li.dataset.id;li.classList.add("dragging");try{e.dataTransfer.effectAllowed="move";e.dataTransfer.setData("text/plain",dragId)}catch(_){}});
+eg.addEventListener("dragend",()=>{dragId=null;eg.querySelectorAll(".dragging,.drop-before,.drop-after").forEach(x=>x.classList.remove("dragging","drop-before","drop-after"))});
+eg.addEventListener("dragover",e=>{
+  const li=e.target.closest&&e.target.closest(".ei");if(!li||!dragId)return;
+  const src=groupIdsOf(dragId);if(!src||li.dataset.g!==src.g)return;
+  e.preventDefault();
+  const r=li.getBoundingClientRect(),after=e.clientY>r.top+r.height/2;
+  eg.querySelectorAll(".drop-before,.drop-after").forEach(x=>x.classList.remove("drop-before","drop-after"));
+  if(li.dataset.id!==dragId)li.classList.add(after?"drop-after":"drop-before");
+});
+eg.addEventListener("drop",e=>{
+  const li=e.target.closest&&e.target.closest(".ei");if(!li||!dragId)return;
+  e.preventDefault();
+  const G=groupIdsOf(dragId);if(!G||li.dataset.g!==G.g||li.dataset.id===dragId)return;
+  const after=li.classList.contains("drop-after");
+  const ids=G.ids.filter(x=>x!==dragId);
+  ids.splice(ids.indexOf(li.dataset.id)+(after?1:0),0,dragId);
+  saveOrder(ids);
+});
 async function openExisting(id){
   if(view!=="edit"){view="edit";remember("view",view)}
   if(id===curId){render();window.scrollTo({top:0});return}
