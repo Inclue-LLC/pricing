@@ -197,9 +197,9 @@ main{display:flex;flex-direction:column;gap:22px;min-width:0}
 .chtbl th:first-child,.chtbl td:first-child{text-align:left}
 .chtbl thead th{font-size:11px;color:var(--muted);font-weight:700}
 .chtbl tbody tr:last-child td{border-bottom:none}
-.chname{display:flex;align-items:center;gap:8px;font-weight:700}
-.chname::before{content:"";width:4px;height:18px;border-radius:2px;background:var(--chc)}
-.chname small{font-weight:400;color:var(--muted)}
+.chname{display:grid;grid-template-columns:4px auto;column-gap:8px;align-items:center;font-weight:700;white-space:normal}
+.chname::before{content:"";width:4px;height:100%;min-height:18px;border-radius:2px;background:var(--chc)}
+.chname small{font-weight:400;color:var(--muted);grid-column:2;font-size:11px;line-height:1.3}
 .ch-direct{--chc:var(--ch-direct)}.ch-consign{--chc:var(--ch-consign)}.ch-online{--chc:var(--ch-online)}
 .rate{display:inline-block;min-width:56px;padding:1px 8px;border-radius:99px;font-weight:700;font-size:12px;text-align:center}
 .rate.ok{background:#E3F4EA;color:var(--good)}
@@ -241,7 +241,11 @@ main{display:flex;flex-direction:column;gap:22px;min-width:0}
 .field .row input{flex:1;width:100%}
 .unit{font-size:12px;color:var(--muted);white-space:nowrap}
 .fxbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:var(--sunken);border-radius:9px;padding:10px 12px;font-size:12.5px}
-.qtybox{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px;align-items:start}
+.qtybox{display:grid;grid-template-columns:1fr;gap:14px;align-items:start}
+.nw{display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+.chq-wrap{background:var(--surface)}
+.chq td input.name{min-width:130px}
+.chq-f{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
 .qtybox .field{border-radius:10px;padding:12px;border:1px solid var(--line)}
 .qtybox .jp{background:var(--jp-soft)}
 .qtybox .cn{background:var(--cn-soft)}
@@ -382,7 +386,11 @@ function newDoc(fx){
     theme:themeFilter&&themeFilter!==NOTHEME?themeFilter:"",name:"",character:charFilter&&charFilter!==NOCHAR?charFilter:"",memo:"",
     fx:{CNY:fx.CNY,USD:fx.USD,auto:true},
     lossRate:5,dutyRate:0,importTaxRate:10,
-    qty:{jpOff:null,jpOn:null,cnOff:null,cnOn:null},
+    // sales channels: free-text name, type decides how the net is computed, rate = 掛率 (consign) or 手数料 (online)
+    chans:{
+      jp:[{name:"自社販売（店頭・イベント）",type:"direct",rate:null,qty:null},{name:"オンライン",type:"online",rate:null,qty:null}],
+      cn:[{name:"自社販売（店頭・イベント）",type:"direct",rate:null,qty:null},{name:"オンライン",type:"online",rate:null,qty:null}]
+    },
     size:{height:null,weightG:null,ratioW:0.7,ratioD:0.5,compress:0},
     intl:{service:"m_cn_eco",fuel:41.5,shipments:1,customs:0},
     mfg:[
@@ -397,8 +405,8 @@ function newDoc(fx){
       {name:"中国国内配送",cur:"CNY",basis:"lot",target:"cn",cif:false,amount:null}
     ],
     sales:{
-      jp:{prices:[{price:null}],onlineFee:null,consign:[{shop:"",rate:null}]},
-      cn:{prices:[{price:null}],onlineFee:null,consign:[{shop:"",rate:null}]}
+      jp:{prices:[{price:null}]},
+      cn:{prices:[{price:null}]}
     }
   };
 }
@@ -412,7 +420,7 @@ function normalize(d){
   if(o.fx.auto!==false){o.fx.auto=true;o.fx.CNY=n(commonFx.CNY);o.fx.USD=n(commonFx.USD)}
   let q=d.qty||(Array.isArray(d.patterns)&&d.patterns[0]?{jp:d.patterns[0].jp,cn:d.patterns[0].cn}:null);
   if(q&&q.jpOff===undefined&&(q.jp!==undefined||q.cn!==undefined))q={jpOff:q.jp??null,jpOn:null,cnOff:q.cn??null,cnOn:null};
-  o.qty={...b.qty,...(q||{})};
+  o.qty={...(q||{})};
   if(!Array.isArray(d.mfg)){
     o.mfg=Array.isArray(d.initial)?d.initial.map(r=>({name:r.name,cur:r.cur,basis:"lot",amount:r.amount})):b.mfg;
   }
@@ -442,7 +450,23 @@ function normalize(d){
     delete x.consignRates;
   }
   delete o.consignRates;
-  o.sell={jp:{pattern:0,off:"direct",...(d.sell?.jp||{})},cn:{pattern:0,off:"direct",...(d.sell?.cn||{})}};
+  o.sell={jp:{pattern:0,...(d.sell?.jp||{})},cn:{pattern:0,...(d.sell?.cn||{})}};
+  // channels: earlier versions had offline/online quantities plus a consignment shop list and one online fee
+  const TYPES=["direct","consign","online"];
+  o.chans={};
+  for(const m of ["jp","cn"]){
+    const x=o.sales[m];
+    let rows;
+    if(Array.isArray(d.chans?.[m]))rows=d.chans[m].map(r=>({name:r.name||"",type:TYPES.includes(r.type)?r.type:"direct",rate:r.rate??null,qty:r.qty??null}));
+    else{
+      rows=[{name:"自社販売（店頭・イベント）",type:"direct",rate:null,qty:o.qty[m+"Off"]??null}];
+      for(const c of x.consign||[])if(has(c.rate))rows.push({name:c.shop||"委託販売",type:"consign",rate:c.rate,qty:null});
+      rows.push({name:"オンライン",type:"online",rate:x.onlineFee??null,qty:o.qty[m+"On"]??null});
+    }
+    o.chans[m]=rows.length?rows:b.chans[m];
+    delete x.consign;delete x.onlineFee;delete o.sell[m].off;
+  }
+  delete o.qty;
   for(const k of ["patterns","materials","processing","initial","wsRates"])delete o[k];
   return o;
 }
@@ -475,7 +499,8 @@ function shipCalc(d){
   return {ok:h>0&&q>0,sv,h,wG,estimated:!has(d.size.weightG),volPc,actual,vol,chargeKg,N,perShip:f,cny};
 }
 
-const qJP=d=>n(d.qty.jpOff)+n(d.qty.jpOn),qCN=d=>n(d.qty.cnOff)+n(d.qty.cnOn);
+const qSum=rows=>(rows||[]).reduce((t,r)=>t+n(r.qty),0);
+const qJP=d=>qSum(d.chans.jp),qCN=d=>qSum(d.chans.cn);
 
 /* ---------- calculation ---------- */
 function toJPY(v,cur){if(!has(v))return 0;return n(v)*(cur==="JPY"?1:n(doc.fx[cur]))}
@@ -509,16 +534,21 @@ function calc(d){
   return {ship,imp,taxPc,feePc,jp,cn,tot,gJ,gC,gT,mfg,log,cifPc,dutyPc,costJP,costCN,lot,avg:gT>0?lot/gT:null};
 }
 // net = what we receive per piece; costRate = cost ÷ net
+const CH_TYPE={direct:"自社販売",consign:"委託販売",online:"オンライン販売"};
 function channels(market,cost,local){
-  const s=doc.sales[market],rate=market==="cn"?n(doc.fx.CNY):1;
+  const rate=market==="cn"?n(doc.fx.CNY):1;
   if(!has(local))return null;
   const P=n(local)*rate;
-  const mk=(key,name,sub,net,fee)=>{const pr=cost==null?null:net-cost;return {key,name,sub,net,fee,profit:pr,costRate:cost==null||!(net>0)?null:cost/net}};
-  const out=[mk("direct","自社販売","店頭・イベント",P,0)];
-  for(const c of s.consign){if(has(c.rate))out.push(mk("consign","委託販売",`${c.shop.trim()||"店名未入力"}（掛率${n(c.rate)}%）`,P*n(c.rate)/100,P-P*n(c.rate)/100))}
-  const fee=P*n(s.onlineFee)/100;
-  out.push(mk("online","オンライン販売",fee?`手数料 ${yen0(fee)}`:"手数料 未入力",P-fee,fee));
-  return {price:P,local:n(local),list:out};
+  const list=doc.chans[market].map((r,i)=>{
+    const t=r.type,rv=n(r.rate);
+    let net,sub;
+    if(t==="consign"){net=has(r.rate)?P*rv/100:null;sub=has(r.rate)?`委託・掛率${rv}%`:"委託・掛率未入力"}
+    else if(t==="online"){net=P-P*rv/100;sub=has(r.rate)?`オンライン・手数料${rv}%`:"オンライン・手数料未入力"}
+    else{net=P;sub="自社販売"}
+    const pr=cost==null||net==null?null:net-cost;
+    return {i,key:t,name:String(r.name||"").trim()||CH_TYPE[t],sub,qty:n(r.qty),net,profit:pr,costRate:cost==null||!(net>0)?null:cost/net};
+  });
+  return {price:P,local:n(local),list};
 }
 
 /* ---------- rendering ---------- */
@@ -528,9 +558,9 @@ function basisSel(path,val){return `<select data-path="${path}" aria-label="計�
 function cardHead(no,title,desc){return `<div class="card-h"><span class="b">${no}</span><div><h2>${title}</h2><p>${desc}</p></div></div>`}
 function delBtn(k,j){return `<button class="ghost" data-act="delRow" data-k="${k}" data-j="${j}" aria-label="行を削除" title="行を削除">✕</button>`}
 
-function knownShops(mk){
+function knownChans(mk){
   const m=new Map();
-  for(const e of list){const c=e.data?.sales?.[mk]?.consign;if(Array.isArray(c))for(const x of c){const k=(x.shop||"").trim();if(k&&has(x.rate)&&!m.has(k))m.set(k,n(x.rate))}}
+  for(const e of list){const c=e.data?.chans?.[mk];if(Array.isArray(c))for(const x of c){const k=String(x.name||"").trim();if(k&&!m.has(k))m.set(k,[x.type,x.rate])}}
   return [...m.entries()];
 }
 function intlPanel(d){
@@ -565,7 +595,7 @@ function summarize(data){
     const R=calc(doc),out={d:doc,R};
     for(const mk of ["jp","cn"]){
       const cost=mk==="jp"?R.costJP:R.costCN;
-      const pats=doc.sales[mk].prices.filter(p=>has(p.price)).map(p=>{const ch=channels(mk,cost,p.price);return {price:ch.price,local:ch.local,direct:ch.list.find(c=>c.key==="direct")}});
+      const pats=doc.sales[mk].prices.filter(p=>has(p.price)).map(p=>{const ch=channels(mk,cost,p.price);return {price:ch.price,local:ch.local,direct:ch.list[0]}});
       out[mk]={cost,qty:mk==="jp"?R.jp:R.cn,pats:pats.slice(0,2),npat:pats.length};
     }
     return out;
@@ -604,7 +634,7 @@ function renderList(){
       <td class="num">${r.jp.qty.toLocaleString()} / ${r.cn.qty.toLocaleString()}</td>
       ${cell(r.jp,"jp")}${cell(r.cn,"cn")}</tr>`).join("")}</tbody>
   </table></div>
-  <p class="small muted">販売価格はパターン2まで表示し、原価率・利益は各パターンを自社販売で計算した値です。原価率 = 原価 ÷ 手取り額。</p>`
+  <p class="small muted">販売価格はパターン2まで表示し、原価率・利益は各パターンを1つ目の販売方法で計算した値です。原価率 = 原価 ÷ 手取り額。</p>`
   :`<section class="card empty"><h2>商品がありません</h2><p class="muted">「新規作成」から見積もりを作ると、ここに一覧で並びます。</p></section>`}`;
 }
 function render(){
@@ -658,13 +688,22 @@ function render(){
   </section>
 
   <section class="card cat-qty" id="s-qty">
-    ${cardHead(2,"製造数量","日本・中国それぞれ、オフライン販売分とオンライン販売分を分けて入力します")}
+    ${cardHead(2,"製造数量","販売方法ごとに数量を入れます。販売方法名は自由に付けられ、種類（自社販売・委託販売・オンライン販売）と掛率・手数料で手取りが決まります")}
     <div class="qtybox">
       ${[["jp","日本販売分"],["cn","中国販売分"]].map(([mk,l])=>`<div class="field ${mk} mkt">
         <span class="lbl"><span class="tag ${mk}">${l}</span></span>
-        <div class="qrow"><label for="q-${mk}Off">オフライン販売分</label><div class="row">${numIn(`qty.${mk}Off`,d.qty[mk+"Off"],l+" オフライン販売分")}<span class="unit">個</span></div></div>
-        <div class="qrow"><label for="q-${mk}On">オンライン販売分</label><div class="row">${numIn(`qty.${mk}On`,d.qty[mk+"On"],l+" オンライン販売分")}<span class="unit">個</span></div></div>
-        <div class="qsub">小計 <b data-out="${mk}Sub"></b></div>
+        <div class="tbl-wrap chq-wrap"><table class="in chq">
+          <thead><tr><th>販売方法名</th><th>種類</th><th class="r">掛率・手数料</th><th class="r">数量</th><th></th></tr></thead>
+          <tbody>${d.chans[mk].map((r,i)=>`<tr>
+            <td><input class="name" data-path="chans.${mk}.${i}.name" value="${esc(r.name)}" list="chan-${mk}" placeholder="例：楽天市場" aria-label="販売方法名"></td>
+            <td><select data-path="chans.${mk}.${i}.type" aria-label="種類">${Object.entries(CH_TYPE).map(([k,v])=>`<option value="${k}"${r.type===k?" selected":""}>${v}</option>`).join("")}</select></td>
+            <td class="r">${r.type==="direct"?'<span class="small muted">—</span>':`<span class="nw">${numIn(`chans.${mk}.${i}.rate`,r.rate,r.type==="consign"?"掛率":"手数料",70)}<span class="unit">%</span></span>`}</td>
+            <td class="r"><span class="nw">${numIn(`chans.${mk}.${i}.qty`,r.qty,"数量",90)}<span class="unit">個</span></span></td>
+            <td>${d.chans[mk].length>1?`<button class="ghost" data-act="delChan" data-m="${mk}" data-i="${i}" aria-label="販売方法を削除" title="販売方法を削除">✕</button>`:""}</td></tr>`).join("")}</tbody>
+        </table></div>
+        <datalist id="chan-${mk}">${knownChans(mk).map(([nm])=>`<option value="${esc(nm)}"></option>`).join("")}</datalist>
+        <div class="chq-f"><button class="add" data-act="addChan" data-m="${mk}">＋ 販売方法を追加</button><span class="qsub">小計 <b data-out="${mk}Sub"></b></span></div>
+        <p class="small muted">掛率＝委託先からの入金率（例：60%）、手数料＝オンライン販売で差し引かれる率（例：10%）</p>
       </div>`).join("")}
       <div class="field tot"><span class="lbl">合計 / 良品数（ロス率反映）</span><span class="big" data-out="qtyTot"></span></div>
     </div>
@@ -705,7 +744,7 @@ function render(){
   </section>
 
   <section class="card cat-sales" id="s-sales">
-    ${cardHead(5,"販売価格","価格パターンを複数入れると、それぞれの原価率と利益がサマリーに並びます。手数料が未定なら空欄のままで構いません")}
+    ${cardHead(5,"販売価格","価格パターンを複数入れると、それぞれの原価率と利益がサマリーに並びます。掛率・手数料は「製造数量」の販売方法ごとに入力します")}
     <div class="markets">
       ${["jp","cn"].map(mk=>{const s=d.sales[mk],u=mk==="jp"?"円":"元";return `<div class="market ${mk}">
         <h3><span class="tag ${mk}">${mk==="jp"?"日本販売":"中国販売"}</span></h3>
@@ -719,16 +758,6 @@ function render(){
             <td>${s.prices.length>1?`<button class="ghost" data-act="delPrice" data-m="${mk}" data-i="${i}" aria-label="価格を削除" title="価格を削除">✕</button>`:""}</td></tr>`).join("")}</tbody>
         </table></div>
         ${s.prices.length<6?`<button class="add" data-act="addPrice" data-m="${mk}">＋ 価格パターンを追加</button>`:""}
-        <div class="field" style="max-width:240px"><div class="subhead ch-online">オンライン販売の手数料</div><div class="row">${numIn(`sales.${mk}.onlineFee`,s.onlineFee,"オンライン販売の手数料")}<span class="unit">%</span></div></div>
-        <div class="field"><div class="subhead ch-consign">委託販売の掛率</div>
-          <p class="small muted">お店ごとの掛率を入れると結果サマリーに表示されます。空欄の行は表示されません。</p>
-          <div class="crates">${s.consign.map((c,i)=>`<div class="crate">
-            <input class="shop" data-path="sales.${mk}.consign.${i}.shop" value="${esc(c.shop)}" list="shops-${mk}" placeholder="店名" aria-label="委託先の店名">
-            ${numIn(`sales.${mk}.consign.${i}.rate`,c.rate,"掛率",80)}<span class="unit">%</span>
-            ${s.consign.length>1?`<button class="ghost" data-act="delRate" data-m="${mk}" data-i="${i}" aria-label="お店を削除" title="お店を削除">✕</button>`:""}</div>`).join("")}</div>
-          <datalist id="shops-${mk}">${knownShops(mk).map(([n_])=>`<option value="${esc(n_)}"></option>`).join("")}</datalist>
-          <button class="add" data-act="addRate" data-m="${mk}" style="--c:var(--ch-consign);--c-soft:#FBF4DC">＋ お店を追加</button>
-        </div>
       </div>`}).join("")}
     </div>
   </section>`;
@@ -746,23 +775,19 @@ function render(){
 }
 
 // Sell-through: the whole lot is paid for up front, so profit = net sales of what sells − cost of the whole lot.
-// Offline units sell through the chosen offline method (自社販売 or a consignment shop), online units through オンライン販売.
+// Each sales channel sells its own quantity (less the loss rate) at its own net price.
 const SELL_RATES=[0.5,0.7,1];
 function sellThrough(mk,R){
   const st=doc.sell[mk],prices=doc.sales[mk].prices;
   const pi=Math.min(Math.max(0,Math.round(n(st.pattern))),prices.length-1);
   const cost=mk==="jp"?R.costJP:R.costCN,good=mk==="jp"?R.gJ:R.gC;
   if(cost==null||!has(prices[pi]?.price))return null;
-  const ch=channels(mk,cost,prices[pi].price);
-  const consign=ch.list.filter(c=>c.key==="consign");
-  const ci=/^c\d+$/.test(st.off)?+st.off.slice(1):-1;
-  const off=ci>=0&&consign[ci]?consign[ci]:ch.list.find(c=>c.key==="direct");
-  const on=ch.list.find(c=>c.key==="online");
-  const keep=1-n(doc.lossRate)/100;
-  const offGood=n(doc.qty[mk+"Off"])*keep,onGood=n(doc.qty[mk+"On"])*keep;
-  const lotCost=cost*good,full=offGood*off.net+onGood*on.net;
-  return {pi,ci:consign[ci]?ci:-1,consign,lotCost,full,breakeven:full>0?lotCost/full:null,
-    rows:SELL_RATES.map(r=>{const rev=full*r,pr=rev-lotCost;return {r,sold:(offGood+onGood)*r,rev,profit:pr,margin:rev>0?pr/rev:null}})};
+  const ch=channels(mk,cost,prices[pi].price),keep=1-n(doc.lossRate)/100;
+  let full=0,units=0,missing=false;
+  for(const c of ch.list){const g=c.qty*keep;if(c.net==null){if(g>0)missing=true;continue}full+=g*c.net;units+=g}
+  const lotCost=cost*good;
+  return {pi,lotCost,full,missing,breakeven:full>0?lotCost/full:null,
+    rows:SELL_RATES.map(r=>{const rev=full*r,pr=rev-lotCost;return {r,sold:units*r,rev,profit:pr,margin:rev>0?pr/rev:null}})};
 }
 function sellBlock(mk,R){
   const S=sellThrough(mk,R);
@@ -773,13 +798,12 @@ function sellBlock(mk,R){
     <div class="st-h"><b>消化率別の売上・利益</b>${S.breakeven!=null?`<span class="be${S.breakeven>1?" ng":""}">損益分岐の消化率 ${S.breakeven>1?"100%超（完売しても赤字）":pct(S.breakeven)}</span>`:""}</div>
     <div class="st-ctl">
       <label>販売価格 <select data-path="sell.${mk}.pattern">${prices.map((p,i)=>has(p.price)?opt(i,`パターン${i+1}（${n(p.price).toLocaleString()}${u}）`,i===S.pi):"").join("")}</select></label>
-      <label>オフライン分の販売方法 <select data-path="sell.${mk}.off">${opt("direct","自社販売",S.ci<0)}${S.consign.map((c,i)=>opt("c"+i,"委託販売 "+c.sub,i===S.ci)).join("")}</select></label>
     </div>
     ${S.full>0?`<table class="chtbl st-t"><thead><tr><th>消化率</th><th>販売数</th><th>売上（手取り）</th><th>利益</th><th>利益率</th></tr></thead><tbody>
       ${S.rows.map(x=>`<tr${x.profit<0?' class="loss"':""}><td><b>${Math.round(x.r*100)}%</b></td><td class="num">${Math.round(x.sold).toLocaleString()}個</td><td class="num">${yen0(x.rev)}</td><td class="num ${cls(x.profit)}"><b>${yen0(x.profit)}</b></td><td class="num ${cls(x.margin)}">${pct(x.margin)}</td></tr>`).join("")}
     </tbody></table>
-    <p class="small muted">製造ロット全体の原価 ${yen0(S.lotCost)} を差し引いた利益です。オフライン分は選んだ販売方法、オンライン分はオンライン販売の手取りで計算しています。</p>`
-    :`<div class="hint">オフライン販売分・オンライン販売分の製造数量を入れると表示されます。</div>`}
+    <p class="small muted">製造ロット全体の原価 ${yen0(S.lotCost)} を差し引いた利益です。各販売方法の数量を、それぞれの手取りで売った場合で計算しています。${S.missing?"掛率が未入力の販売方法は売上に含めていません。":""}</p>`
+    :`<div class="hint">販売方法ごとの数量を入れると表示されます。</div>`}
   </div>`;
 }
 function rateCls(r){if(r==null)return"";return r<=0.4?"ok":r<=0.6?"mid":"hi"}
@@ -845,14 +869,14 @@ function updateOutputs(){
     const bar=cost>0?`<div class="bar" role="img" aria-label="原価の内訳">${seg.filter(x=>x[1]>0).map(([k,v,l])=>`<span class="${k}" style="width:${(v/cost*100).toFixed(2)}%" title="${l} ${yen(v)}"></span>`).join("")}</div>`:`<div class="bar"></div>`;
     const cnyNote=mk==="cn"&&cost!=null&&n(doc.fx.CNY)?`${(cost/n(doc.fx.CNY)).toFixed(2)}元`:(mk==="jp"&&(R.dutyPc+R.taxPc+R.feePc)?`うち関税・輸入消費税・立替手数料 ${yen(R.dutyPc+R.taxPc+R.feePc)}`:"");
     const pats=doc.sales[mk].prices.map((p,i)=>({label:`パターン${i+1}`,ch:channels(mk,cost,p.price)})).filter(x=>x.ch);
-    const body=!pats.length?`<div class="hint">販売価格を入れると、自社販売・委託販売・オンライン販売の原価率と利益が表示されます。</div>`:cost==null?`<div class="hint">製造数量を入力すると、原価率と利益が計算されます。</div>`:
+    const body=!pats.length?`<div class="hint">販売価格を入れると、販売方法ごとの原価率と利益が表示されます。</div>`:cost==null?`<div class="hint">製造数量を入力すると、原価率と利益が計算されます。</div>`:
       pats.map(({label,ch})=>`<div class="pblock">
         <div class="pblock-h"><span class="pname">${esc(label)}</span><span class="pval">${yen0(ch.price)}</span><span class="small muted">${mk==="cn"?`${ch.local.toLocaleString("ja-JP",{maximumFractionDigits:2})}元`:`税込 ${yen0(ch.price*1.1)}`}</span></div>
-        <table class="chtbl"><thead><tr><th>販売方法</th><th>手取り / 個</th><th>原価率</th><th>利益 / 個</th></tr></thead><tbody>
-        ${ch.list.map(c=>`<tr><td><span class="chname ch-${c.key}">${c.name} <small>${esc(c.sub)}</small></span></td><td class="num">${yen0(c.net)}</td><td><span class="rate ${rateCls(c.costRate)}">${pct(c.costRate)}</span></td><td class="num ${cls(c.profit)}"><b>${yen(c.profit)}</b></td></tr>`).join("")}
+        <table class="chtbl"><thead><tr><th>販売方法</th><th>数量</th><th>手取り / 個</th><th>原価率</th><th>利益 / 個</th></tr></thead><tbody>
+        ${ch.list.map(c=>`<tr><td><span class="chname ch-${c.key}">${esc(c.name)}</span></td><td class="num">${c.qty.toLocaleString()}個</td><td class="num">${c.net==null?"—":yen0(c.net)}</td><td>${c.costRate==null?"—":`<span class="rate ${rateCls(c.costRate)}">${pct(c.costRate)}</span>`}</td><td class="num ${cls(c.profit)}"><b>${yen(c.profit)}</b></td></tr>`).join("")}
         </tbody></table></div>`).join("");
     return `<div class="msum ${mk}">
-      <div class="msum-h"><h3>${mk==="jp"?"日本販売":"中国販売"}</h3><span class="q">製造 ${qty.toLocaleString()}個（オフライン ${n(doc.qty[mk+"Off"]).toLocaleString()}・オンライン ${n(doc.qty[mk+"On"]).toLocaleString()}）／ 良品 ${(Math.round(good*10)/10).toLocaleString()}個</span></div>
+      <div class="msum-h"><h3>${mk==="jp"?"日本販売":"中国販売"}</h3><span class="q">製造 ${qty.toLocaleString()}個 ／ 良品 ${(Math.round(good*10)/10).toLocaleString()}個</span></div>
       <div class="msum-b">
         <div class="figs">
           <div class="fig cost"><span class="lb">原価 / 個</span><span class="v">${yen(cost)}</span>${bar}<span class="u">${cnyNote}</span></div>
@@ -909,12 +933,12 @@ document.addEventListener("input",e=>{
   const p=t.dataset.path;
   if(p==="intl.service"&&SERVICES[v])doc.intl.fuel=SERVICES[v].fuel;
   if(p==="fx.CNY"||p==="fx.USD")doc.fx.auto=false;
-  const sm=p.match(/^sales\.(jp|cn)\.consign\.(\d+)\.shop$/);
-  if(sm){const row=doc.sales[sm[1]].consign[+sm[2]],hit=knownShops(sm[1]).find(([k])=>k===String(v).trim());
-    if(hit&&!has(row.rate)){row.rate=hit[1];const ri=document.querySelector(`[data-path="sales.${sm[1]}.consign.${sm[2]}.rate"]`);if(ri)ri.value=hit[1]}}
+  const cm=p.match(/^chans\.(jp|cn)\.(\d+)\.name$/);
+  if(cm){const row=doc.chans[cm[1]][+cm[2]],hit=knownChans(cm[1]).find(([k])=>k===String(v).trim());
+    if(hit&&!has(row.rate)&&has(hit[1][1])&&hit[1][0]!=="direct"){row.type=hit[1][0];row.rate=hit[1][1];render();touch();return}}
   const am=p.match(/^logistics\.(\d+)\.amount$/);
   if(am&&doc.logistics[+am[1]].intlRow)doc.logistics[+am[1]].auto=v==null;
-  if((t.tagName==="SELECT"&&p.endsWith(".target"))||p==="intl.service")render();
+  if((t.tagName==="SELECT"&&p.endsWith(".target"))||p==="intl.service"||/^chans\.(jp|cn)\.\d+\.type$/.test(p))render();
   else updateOutputs();
   if(p==="name"||p==="theme"||p==="size.height"||p==="character")renderSide();
   touch();
@@ -947,8 +971,8 @@ document.addEventListener("click",async e=>{
   if(a==="resetIntl"){doc.logistics[+b.dataset.j].auto=true;updateOutputs();touch();return}
   if(a==="delRow"){doc[b.dataset.k].splice(+b.dataset.j,1);render();touch()}
   if(a==="addPrice"){const ps=doc.sales[b.dataset.m].prices;ps.push({price:null});render();touch();const ins=document.querySelectorAll(`[data-path^="sales.${b.dataset.m}.prices."][data-path$=".price"]`);if(ins.length)ins[ins.length-1].focus()}
-  if(a==="addRate"){const r=doc.sales[b.dataset.m].consign;r.push({shop:"",rate:null});render();touch();const ins=document.querySelectorAll(`[data-path^="sales.${b.dataset.m}.consign."][data-path$=".shop"]`);if(ins.length)ins[ins.length-1].focus();return}
-  if(a==="delRate"){doc.sales[b.dataset.m].consign.splice(+b.dataset.i,1);render();touch();return}
+  if(a==="addChan"){const r=doc.chans[b.dataset.m];r.push({name:"",type:"consign",rate:null,qty:null});render();touch();const ins=document.querySelectorAll(`[data-path^="chans.${b.dataset.m}."][data-path$=".name"]`);if(ins.length)ins[ins.length-1].focus();return}
+  if(a==="delChan"){doc.chans[b.dataset.m].splice(+b.dataset.i,1);render();touch();return}
   if(a==="delPrice"){doc.sales[b.dataset.m].prices.splice(+b.dataset.i,1);render();touch()}
   if(a==="applyFx"){doc.fx={CNY:n(commonFx.CNY),USD:n(commonFx.USD),auto:true};render();touch()}
 });
