@@ -222,6 +222,12 @@ main{display:flex;flex-direction:column;gap:22px;min-width:0}
 .st-ctl label{display:flex;align-items:center;gap:6px}
 .st-ctl select{font-size:12px;padding:3px 6px}
 .st-t tr.loss td{background:#FDF3F3}
+.stc{border:1px solid var(--line);border-radius:10px;padding:10px 12px 4px;display:flex;flex-direction:column;gap:6px}
+.stc.total{background:var(--sunken)}
+.stc-h{display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px}
+.stc-h .chname{flex:0 1 auto}
+.stc-q{font-size:12px;color:var(--muted)}
+.stc-h .be{margin-left:auto}
 .hint{font-size:12px;color:var(--muted);background:var(--sunken);border-radius:8px;padding:8px 10px}
 
 .mini{position:sticky;top:64px;z-index:10;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:8px 14px;display:flex;gap:6px 18px;flex-wrap:wrap;align-items:center;font-size:13px}
@@ -777,35 +783,47 @@ function render(){
   }
 }
 
-// Sell-through: the whole lot is paid for up front, so profit = net sales of what sells − cost of the whole lot.
-// Each sales channel sells its own quantity (less the loss rate) at its own net price.
+// Sell-through per sales channel: a channel's sold units = its good units (quantity less loss) × sell-through,
+// and its profit = net sales − cost of all units made for that channel (unsold ones included).
 const SELL_RATES=[0.5,0.7,1];
 function sellThrough(mk,R){
   const st=doc.sell[mk],prices=doc.sales[mk].prices;
   const pi=Math.min(Math.max(0,Math.round(n(st.pattern))),prices.length-1);
-  const cost=mk==="jp"?R.costJP:R.costCN,good=mk==="jp"?R.gJ:R.gC;
+  const cost=mk==="jp"?R.costJP:R.costCN;
   if(cost==null||!has(prices[pi]?.price))return null;
   const ch=channels(mk,cost,prices[pi].price),keep=1-n(doc.lossRate)/100;
-  let full=0,units=0,missing=false;
-  for(const c of ch.list){const g=c.qty*keep;if(c.net==null){if(g>0)missing=true;continue}full+=g*c.net;units+=g}
-  const lotCost=cost*good;
-  return {pi,lotCost,full,missing,breakeven:full>0?lotCost/full:null,
-    rows:SELL_RATES.map(r=>{const rev=full*r,pr=rev-lotCost;return {r,sold:units*r,rev,profit:pr,margin:rev>0?pr/rev:null}})};
+  const rowsFor=(good,net)=>{const lc=cost*good,full=good*net;
+    return {good,lotCost:lc,full,breakeven:full>0?lc/full:null,
+      rows:SELL_RATES.map(r=>{const rev=full*r,pr=rev-lc;return {r,sold:good*r,rev,profit:pr,margin:rev>0?pr/rev:null}})}};
+  const per=ch.list.filter(c=>c.qty>0).map(c=>({c,...rowsFor(c.qty*keep,c.net)}));
+  const good=per.reduce((t,x)=>t+x.good,0),full=per.reduce((t,x)=>t+x.full,0),lc=per.reduce((t,x)=>t+x.lotCost,0);
+  const total={good,lotCost:lc,full,breakeven:full>0?lc/full:null,
+    rows:SELL_RATES.map((r,k)=>{const rev=per.reduce((t,x)=>t+x.rows[k].rev,0),pr=rev-lc;return {r,sold:good*r,rev,profit:pr,margin:rev>0?pr/rev:null}})};
+  return {pi,per,total};
 }
+function stTable(x){
+  return `<table class="chtbl st-t"><thead><tr><th>消化率</th><th>販売数</th><th>売上（手取り）</th><th>利益</th><th>利益率</th></tr></thead><tbody>
+    ${x.rows.map(y=>`<tr${y.profit<0?' class="loss"':""}><td><b>${Math.round(y.r*100)}%</b></td><td class="num">${Math.round(y.sold).toLocaleString()}個</td><td class="num">${yen0(y.rev)}</td><td class="num ${cls(y.profit)}"><b>${yen0(y.profit)}</b></td><td class="num ${cls(y.margin)}">${pct(y.margin)}</td></tr>`).join("")}
+  </tbody></table>`;
+}
+function beTag(be){return be==null?"":`<span class="be${be>1?" ng":""}">損益分岐 ${be>1?"100%超（完売しても赤字）":pct(be)}</span>`}
 function sellBlock(mk,R){
   const S=sellThrough(mk,R);
   if(!S)return "";
   const prices=doc.sales[mk].prices,u=mk==="cn"?"元":"円";
   const opt=(v,l,sel)=>`<option value="${v}"${sel?" selected":""}>${esc(l)}</option>`;
   return `<div class="st">
-    <div class="st-h"><b>消化率別の売上・利益</b>${S.breakeven!=null?`<span class="be${S.breakeven>1?" ng":""}">損益分岐の消化率 ${S.breakeven>1?"100%超（完売しても赤字）":pct(S.breakeven)}</span>`:""}</div>
+    <div class="st-h"><b>消化率別の売上・利益</b></div>
     <div class="st-ctl">
       <label>販売価格 <select data-path="sell.${mk}.pattern">${prices.map((p,i)=>has(p.price)?opt(i,`パターン${i+1}（${n(p.price).toLocaleString()}${u}）`,i===S.pi):"").join("")}</select></label>
     </div>
-    ${S.full>0?`<table class="chtbl st-t"><thead><tr><th>消化率</th><th>販売数</th><th>売上（手取り）</th><th>利益</th><th>利益率</th></tr></thead><tbody>
-      ${S.rows.map(x=>`<tr${x.profit<0?' class="loss"':""}><td><b>${Math.round(x.r*100)}%</b></td><td class="num">${Math.round(x.sold).toLocaleString()}個</td><td class="num">${yen0(x.rev)}</td><td class="num ${cls(x.profit)}"><b>${yen0(x.profit)}</b></td><td class="num ${cls(x.margin)}">${pct(x.margin)}</td></tr>`).join("")}
-    </tbody></table>
-    <p class="small muted">製造ロット全体の原価 ${yen0(S.lotCost)} を差し引いた利益です。各販売方法の数量を、それぞれの手取りで売った場合で計算しています。${S.missing?"掛率が未入力の販売方法は売上に含めていません。":""}</p>`
+    ${S.per.length?S.per.map(x=>`<div class="stc">
+        <div class="stc-h"><span class="chname ch-${x.c.key}">${esc(x.c.name)}${x.c.terms?`<small>${esc(x.c.terms)}</small>`:""}</span><span class="stc-q">製造 ${x.c.qty.toLocaleString()}個（良品 ${(Math.round(x.good*10)/10).toLocaleString()}個）</span>${beTag(x.breakeven)}</div>
+        ${stTable(x)}
+      </div>`).join("")+(S.per.length>1?`<div class="stc total">
+        <div class="stc-h"><span class="chname">合計</span><span class="stc-q">良品 ${(Math.round(S.total.good*10)/10).toLocaleString()}個</span>${beTag(S.total.breakeven)}</div>
+        ${stTable(S.total)}
+      </div>`:"")+`<p class="small muted">各販売方法の製造数（ロス率を引いた良品数）に消化率を掛けて販売数を出し、その販売方法の製造分の原価（売れ残り分を含む）を差し引いた利益です。</p>`
     :`<div class="hint">販売方法ごとの数量を入れると表示されます。</div>`}
   </div>`;
 }
