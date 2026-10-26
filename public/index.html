@@ -30,6 +30,7 @@ body{margin:0}img{max-width:100%}
   --c-duty:#D04848;  --c-duty-soft:#FBE8E8;
   --c-tax:#A8479B;   --c-tax-soft:#F8E9F5;
   --c-fee:#8C8577;
+  --c-roy:#5E8F2B;
   --c-sales:#C2416D; --c-sales-soft:#FCE9F0;
   --ch-direct:#7A4CC8; --ch-consign:#C08F00; --ch-online:#2A84CF;
   color-scheme:light;
@@ -188,7 +189,10 @@ main{display:flex;flex-direction:column;gap:22px;min-width:0}
 .fig .u{font-size:11px;color:var(--muted)}
 .bar{display:flex;height:10px;border-radius:99px;overflow:hidden;background:var(--surface);margin-top:6px}
 .bar span{display:block;height:100%}
-.bar .mfg{background:var(--c-mfg)}.bar .log{background:var(--c-log)}.bar .duty{background:var(--c-duty)}.bar .tax{background:var(--c-tax)}.bar .fee{background:var(--c-fee)}
+.bar .mfg{background:var(--c-mfg)}.bar .log{background:var(--c-log)}.bar .duty{background:var(--c-duty)}.bar .tax{background:var(--c-tax)}.bar .fee{background:var(--c-fee)}.bar .roy{background:var(--c-roy)}
+.cat-roy{--c:var(--c-roy);--c-soft:#EEF5E6}
+.roybox{border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:10px;background:var(--surface)}
+.roybox .subhead::before{background:var(--c-roy)}
 .cat-tax{--c:var(--c-tax);--c-soft:var(--c-tax-soft)}.cat-fee{--c:var(--c-fee);--c-soft:var(--sunken)}
 .legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--muted)}
 .dot{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px;background:var(--c)}
@@ -349,6 +353,7 @@ table.in td input.name{width:100%;min-width:140px}
 </div>
 <datalist id="charOptions"></datalist>
 <datalist id="themeOptions"></datalist>
+<datalist id="licOptions"></datalist>
 
 <script>
 (function(){
@@ -392,6 +397,7 @@ function newDoc(fx){
     theme:themeFilter&&themeFilter!==NOTHEME?themeFilter:"",name:"",character:charFilter&&charFilter!==NOCHAR?charFilter:"",memo:"",
     fx:{CNY:fx.CNY,USD:fx.USD,auto:true},
     lossRate:5,dutyRate:0,importTaxRate:10,
+    royalty:{licensor:"",rate:null,basis:"made"},
     // sales channels: free-text name, rate = 掛率 % (share received), fee = 手数料 % (deducted); both optional
     chans:{
       jp:[{name:"自社販売（店頭・イベント）",rate:null,fee:null,qty:null},{name:"オンライン",rate:null,fee:null,qty:null}],
@@ -456,6 +462,7 @@ function normalize(d){
     delete x.consignRates;
   }
   delete o.consignRates;
+  o.royalty={licensor:"",rate:null,basis:"made",...(d.royalty||{})};
   o.sell={jp:{pattern:0,...(d.sell?.jp||{})},cn:{pattern:0,...(d.sell?.cn||{})}};
   // channels: earlier versions had offline/online quantities plus a consignment shop list and one online fee
   o.chans={};
@@ -603,8 +610,8 @@ function summarize(data){
     doc=normalize(JSON.parse(JSON.stringify(data)));
     const R=calc(doc),out={d:doc,R};
     for(const mk of ["jp","cn"]){
-      const cost=mk==="jp"?R.costJP:R.costCN;
-      const pats=doc.sales[mk].prices.filter(p=>has(p.price)).map(p=>{const ch=channels(mk,cost,p.price);return {price:ch.price,local:ch.local,direct:ch.list[0]}});
+      const base=mk==="jp"?R.costJP:R.costCN,cost=base==null?null:base+royalty(mk,selPrice(mk)).pc;
+      const pats=doc.sales[mk].prices.filter(p=>has(p.price)).map(p=>{const ch=channels(mk,base==null?null:base+royalty(mk,p.price).pc,p.price);return {price:ch.price,local:ch.local,direct:ch.list[0]}});
       out[mk]={cost,qty:mk==="jp"?R.jp:R.cn,pats:pats.slice(0,2),npat:pats.length};
     }
     return out;
@@ -680,7 +687,7 @@ function render(){
 
   <section id="s-summary" style="display:flex;flex-direction:column;gap:12px">
     <div class="summary-h"><h2 style="font-size:18px">結果サマリー</h2><span class="small muted">金額は円・税抜、1個あたりは良品1個あたり</span></div>
-    <div class="legend"><span class="cat-mfg"><i class="dot"></i>製造費用</span><span class="cat-log"><i class="dot"></i>物流</span><span class="cat-duty"><i class="dot"></i>関税</span><span class="cat-tax"><i class="dot"></i>輸入消費税</span><span class="cat-fee"><i class="dot"></i>立替手数料</span><span>　原価率 = 原価 ÷ 1個あたりの手取り額</span></div>
+    <div class="legend"><span class="cat-mfg"><i class="dot"></i>製造費用</span><span class="cat-log"><i class="dot"></i>物流</span><span class="cat-duty"><i class="dot"></i>関税</span><span class="cat-tax"><i class="dot"></i>輸入消費税</span><span class="cat-fee"><i class="dot"></i>立替手数料</span><span class="cat-roy"><i class="dot"></i>ロイヤリティ</span><span>　原価率 = 原価 ÷ 1個あたりの手取り額</span></div>
     <div class="markets-sum" id="sumBody"></div>
   </section>
 
@@ -694,6 +701,15 @@ function render(){
       <div class="field"><label>輸入消費税率（国税＋地方税）</label><div class="row">${numIn("importTaxRate",d.importTaxRate,"輸入消費税率")}<span class="unit">%</span></div></div>
     </div>
     <div class="fxbar" id="fxNote"></div>
+    <div class="roybox">
+      <div class="subhead">版権元のロイヤリティ</div>
+      <div class="fields">
+        <div class="field"><label for="f-lic">版権元</label><input id="f-lic" data-path="royalty.licensor" value="${esc(d.royalty.licensor)}" list="licOptions" placeholder="入力"></div>
+        <div class="field"><label>ロイヤリティ率</label><div class="row">${numIn("royalty.rate",d.royalty.rate,"ロイヤリティ率")}<span class="unit">%</span></div></div>
+        <div class="field"><label for="f-roybasis">計算方法</label><select id="f-roybasis" data-path="royalty.basis">${[["made","製造数ごと（作った数で支払う）"],["sold","販売数ごと（売れた数で支払う）"]].map(([v,l])=>`<option value="${v}"${d.royalty.basis===v?" selected":""}>${l}</option>`).join("")}</select></div>
+      </div>
+      <p class="small muted">販売価格（税抜）× ロイヤリティ率で計算します。版権元の名前を入れると、以前使った率と計算方法が入ります。</p>
+    </div>
   </section>
 
   <section class="card cat-qty" id="s-qty">
@@ -791,15 +807,18 @@ function sellThrough(mk,R){
   const pi=Math.min(Math.max(0,Math.round(n(st.pattern))),prices.length-1);
   const cost=mk==="jp"?R.costJP:R.costCN;
   if(cost==null||!has(prices[pi]?.price))return null;
-  const ch=channels(mk,cost,prices[pi].price),keep=1-n(doc.lossRate)/100;
-  const rowsFor=(good,net)=>{const lc=cost*good,full=good*net;
-    return {good,lotCost:lc,full,breakeven:full>0?lc/full:null,
-      rows:SELL_RATES.map(r=>{const rev=full*r,pr=rev-lc;return {r,sold:good*r,rev,profit:pr,margin:rev>0?pr/rev:null}})}};
+  const ry=royalty(mk,prices[pi].price),costMade=cost+ry.made;
+  const ch=channels(mk,cost+ry.pc,prices[pi].price),keep=1-n(doc.lossRate)/100;
+  const rowsFor=(good,net)=>{const lc=costMade*good,full=good*net,afterRoy=good*(net-ry.sold);
+    return {good,lotCost:lc,full,breakeven:afterRoy>0?lc/afterRoy:null,
+      rows:SELL_RATES.map(r=>{const rev=full*r,pr=rev-lc-ry.sold*good*r;return {r,sold:good*r,rev,profit:pr,margin:rev>0?pr/rev:null}})}};
   const per=ch.list.filter(c=>c.qty>0).map(c=>({c,...rowsFor(c.qty*keep,c.net)}));
   const good=per.reduce((t,x)=>t+x.good,0),full=per.reduce((t,x)=>t+x.full,0),lc=per.reduce((t,x)=>t+x.lotCost,0);
   const total={good,lotCost:lc,full,breakeven:full>0?lc/full:null,
-    rows:SELL_RATES.map((r,k)=>{const rev=per.reduce((t,x)=>t+x.rows[k].rev,0),pr=rev-lc;return {r,sold:good*r,rev,profit:pr,margin:rev>0?pr/rev:null}})};
-  return {pi,per,total};
+    rows:SELL_RATES.map((r,k)=>{const rev=per.reduce((t,x)=>t+x.rows[k].rev,0),pr=per.reduce((t,x)=>t+x.rows[k].profit,0);return {r,sold:good*r,rev,profit:pr,margin:rev>0?pr/rev:null}})};
+  const afterAll=per.reduce((t,x)=>t+x.good*(x.c.net-ry.sold),0);
+  total.breakeven=afterAll>0?lc/afterAll:null;
+  return {pi,per,total,ry};
 }
 function stTable(x){
   return `<table class="chtbl st-t"><thead><tr><th>消化率</th><th>販売数</th><th>売上（手取り）</th><th>利益</th><th>利益率</th></tr></thead><tbody>
@@ -823,9 +842,28 @@ function sellBlock(mk,R){
       </div>`).join("")+(S.per.length>1?`<div class="stc total">
         <div class="stc-h"><span class="chname">合計</span><span class="stc-q">良品 ${(Math.round(S.total.good*10)/10).toLocaleString()}個</span>${beTag(S.total.breakeven)}</div>
         ${stTable(S.total)}
-      </div>`:"")+`<p class="small muted">各販売方法の製造数（ロス率を引いた良品数）に消化率を掛けて販売数を出し、その販売方法の製造分の原価（売れ残り分を含む）を差し引いた利益です。</p>`
+      </div>`:"")+`<p class="small muted">各販売方法の製造数（ロス率を引いた良品数）に消化率を掛けて販売数を出し、その販売方法の製造分の原価（売れ残り分を含む）を差し引いた利益です。${S.ry.sold?"販売数ごとのロイヤリティは、売れた数の分だけ差し引いています。":""}</p>`
     :`<div class="hint">販売方法ごとの数量を入れると表示されます。</div>`}
   </div>`;
+}
+// Licensor royalty = price (税抜) × rate. "made": paid on every unit produced, so it is spread over good units
+// and belongs to the lot cost. "sold": paid only on units sold, so it is charged per sale.
+function royalty(mk,local){
+  const r=doc.royalty;
+  if(!has(r.rate)||!has(local))return {pc:0,made:0,sold:0};
+  const per=n(local)*(mk==="cn"?n(doc.fx.CNY):1)*n(r.rate)/100,keep=1-n(doc.lossRate)/100;
+  if(r.basis==="sold")return {pc:per,made:0,sold:per};
+  const made=keep>0?per/keep:0;
+  return {pc:made,made,sold:0};
+}
+function selPrice(mk){
+  const ps=doc.sales[mk].prices,i=Math.min(Math.max(0,Math.round(n(doc.sell[mk].pattern))),ps.length-1);
+  return has(ps[i]?.price)?ps[i].price:(ps.find(x=>has(x.price))||{}).price;
+}
+function knownLicensors(){
+  const m=new Map();
+  for(const e of list){const r=e.data?.royalty,k=String(r?.licensor||"").trim();if(k&&!m.has(k))m.set(k,{rate:r.rate??null,basis:r.basis||"made",character:charOf(e.data)})}
+  return m;
 }
 function rateCls(r){if(r==null)return"";return r<=0.4?"ok":r<=0.6?"mid":"hi"}
 function updateOutputs(){
@@ -885,11 +923,15 @@ function updateOutputs(){
   // summary per market
   const sb=$("#sumBody");
   if(sb)sb.innerHTML=["jp","cn"].map(mk=>{
-    const cost=mk==="jp"?R.costJP:R.costCN,good=mk==="jp"?R.gJ:R.gC,qty=mk==="jp"?R.jp:R.cn;
-    const seg=[["mfg",R.mfg,"製造費用"],["log",R.log.all+(mk==="jp"?R.log.jp:R.log.cn),"物流"],["duty",mk==="jp"?R.dutyPc:0,"関税"],["tax",mk==="jp"?R.taxPc:0,"輸入消費税"],["fee",mk==="jp"?R.feePc:0,"立替手数料"]];
+    const base=mk==="jp"?R.costJP:R.costCN,good=mk==="jp"?R.gJ:R.gC,qty=mk==="jp"?R.jp:R.cn;
+    const ry=royalty(mk,selPrice(mk)),cost=base==null?null:base+ry.pc;
+    const costAt=local=>base==null?null:base+royalty(mk,local).pc;
+    const seg=[["roy",ry.pc,"ロイヤリティ"],["mfg",R.mfg,"製造費用"],["log",R.log.all+(mk==="jp"?R.log.jp:R.log.cn),"物流"],["duty",mk==="jp"?R.dutyPc:0,"関税"],["tax",mk==="jp"?R.taxPc:0,"輸入消費税"],["fee",mk==="jp"?R.feePc:0,"立替手数料"]];
     const bar=cost>0?`<div class="bar" role="img" aria-label="原価の内訳">${seg.filter(x=>x[1]>0).map(([k,v,l])=>`<span class="${k}" style="width:${(v/cost*100).toFixed(2)}%" title="${l} ${yen(v)}"></span>`).join("")}</div>`:`<div class="bar"></div>`;
-    const cnyNote=mk==="cn"&&cost!=null&&n(doc.fx.CNY)?`${(cost/n(doc.fx.CNY)).toFixed(2)}元`:(mk==="jp"&&(R.dutyPc+R.taxPc+R.feePc)?`うち関税・輸入消費税・立替手数料 ${yen(R.dutyPc+R.taxPc+R.feePc)}`:"");
-    const pats=doc.sales[mk].prices.map((p,i)=>({label:`パターン${i+1}`,ch:channels(mk,cost,p.price)})).filter(x=>x.ch);
+    const cnyNote=[mk==="cn"&&cost!=null&&n(doc.fx.CNY)?`${(cost/n(doc.fx.CNY)).toFixed(2)}元`:"",
+      ry.pc?`うちロイヤリティ ${yen(ry.pc)}（${doc.royalty.basis==="sold"?"販売数ごと":"製造数ごと"}・パターン${Math.round(n(doc.sell[mk].pattern))+1}の価格で計算）`:"",
+      mk==="jp"&&(R.dutyPc+R.taxPc+R.feePc)?`うち関税・輸入消費税・立替手数料 ${yen(R.dutyPc+R.taxPc+R.feePc)}`:""].filter(Boolean).join("<br>");
+    const pats=doc.sales[mk].prices.map((p,i)=>({label:`パターン${i+1}`,ch:channels(mk,costAt(p.price),p.price)})).filter(x=>x.ch);
     const body=!pats.length?`<div class="hint">販売価格を入れると、販売方法ごとの原価率と利益が表示されます。</div>`:cost==null?`<div class="hint">製造数量を入力すると、原価率と利益が計算されます。</div>`:
       pats.map(({label,ch})=>`<div class="pblock">
         <div class="pblock-h"><span class="pname">${esc(label)}</span><span class="pval">${yen0(ch.price)}</span><span class="small muted">${mk==="cn"?`${ch.local.toLocaleString("ja-JP",{maximumFractionDigits:2})}元`:`税込 ${yen0(ch.price*1.1)}`}</span></div>
@@ -937,6 +979,7 @@ function renderSide(){
   // theme suggestions follow the character being edited
   const curChar=doc?charOf(doc):"";
   $("#themeOptions").innerHTML=[...new Set(all.filter(v=>!doc||charOf(v.d)===curChar).map(v=>String(v.d.theme||"").trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"ja")).map(t=>`<option value="${esc(t)}"></option>`).join("");
+  $("#licOptions").innerHTML=[...knownLicensors().keys()].sort((a,b)=>a.localeCompare(b,"ja")).map(k=>`<option value="${esc(k)}"></option>`).join("");
   $("#charOptions").innerHTML=chars.filter(c=>c!==NOCHAR).map(c=>`<option value="${esc(c)}"></option>`).join("");
   $("#btnNew").disabled=!canWrite;
 }
@@ -954,6 +997,12 @@ document.addEventListener("input",e=>{
   const p=t.dataset.path;
   if(p==="intl.service"&&SERVICES[v])doc.intl.fuel=SERVICES[v].fuel;
   if(p==="fx.CNY"||p==="fx.USD")doc.fx.auto=false;
+  if(p==="royalty.licensor"){const hit=knownLicensors().get(String(v).trim());
+    if(hit&&!has(doc.royalty.rate)&&has(hit.rate)){doc.royalty.rate=hit.rate;doc.royalty.basis=hit.basis;render();touch();return}}
+  if(p==="character"&&!String(doc.royalty.licensor||"").trim()){
+    const c=String(v).trim(),hit=[...knownLicensors().entries()].find(([,x])=>c&&x.character===c);
+    if(hit){doc.royalty={licensor:hit[0],rate:hit[1].rate,basis:hit[1].basis};const f=document.querySelector("#f-lic");if(f)f.value=hit[0];
+      const r=document.querySelector('[data-path="royalty.rate"]');if(r)r.value=hit[1].rate??"";const s2=document.querySelector("#f-roybasis");if(s2)s2.value=hit[1].basis}}
   const cm=p.match(/^chans\.(jp|cn)\.(\d+)\.name$/);
   if(cm){const row=doc.chans[cm[1]][+cm[2]],hit=knownChans(cm[1]).find(([k])=>k===String(v).trim());
     if(hit&&!has(row.rate)&&!has(row.fee)&&(has(hit[1].rate)||has(hit[1].fee))){row.rate=hit[1].rate;row.fee=hit[1].fee;render();touch();return}}
