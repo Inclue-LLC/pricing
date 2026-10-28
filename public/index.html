@@ -142,7 +142,7 @@ input:disabled,select:disabled{background:var(--sunken)}
 .plist .chartag{line-height:1.6}
 .plist .pl{height:26px;display:flex;align-items:center;justify-content:flex-end;gap:6px}
 .plist td:not(.num) .pl{justify-content:flex-start}
-.plist .pl small{font-size:11px;color:var(--muted)}
+.plist .pl small{font-size:11px;color:var(--muted);max-width:9em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .plist .sub{display:block;font-size:11px;color:var(--muted);font-weight:400}
 .themetag{font-size:12px;font-weight:700;color:var(--c-sales);background:var(--c-sales-soft);padding:2px 10px;border-radius:99px;line-height:1.6}
 .chartag{font-size:12px;font-weight:700;color:var(--brand);background:var(--brand-soft);padding:2px 10px;border-radius:99px}
@@ -611,8 +611,8 @@ function summarize(data){
     const R=calc(doc),out={d:doc,R};
     for(const mk of ["jp","cn"]){
       const base=mk==="jp"?R.costJP:R.costCN,cost=base==null?null:base+royalty(mk,selPrice(mk)).pc;
-      const pats=doc.sales[mk].prices.filter(p=>has(p.price)).map(p=>{const ch=channels(mk,base==null?null:base+royalty(mk,p.price).pc,p.price);return {price:ch.price,local:ch.local,direct:ch.list[0]}});
-      out[mk]={cost,qty:mk==="jp"?R.jp:R.cn,pats:pats.slice(0,2),npat:pats.length};
+      const pats=doc.sales[mk].prices.filter(p=>has(p.price)).map(p=>{const ch=channels(mk,base==null?null:base+royalty(mk,p.price).pc,p.price);return {price:ch.price,local:ch.local,direct:ch.list.filter(c=>c.costRate!=null).sort((a,b)=>a.costRate-b.costRate)[0]||ch.list[0]}});
+      out[mk]={cost,qty:mk==="jp"?R.jp:R.cn,pats:pats.slice(0,2),npat:pats.length,nch:doc.chans[mk].length};
     }
     return out;
   }finally{doc=saved}
@@ -629,7 +629,7 @@ function renderList(){
   const more=x=>x.npat>2?`<span class="sub">他${x.npat-2}パターン</span>`:"";
   const cell=(x,mk)=>`<td class="num">${yen(x.cost)}</td>
     <td class="num">${stack(x,p=>`<div class="pl">${yen0(p.price)}${mk==="cn"?`<small>${p.local.toLocaleString("ja-JP",{maximumFractionDigits:2})}元</small>`:""}</div>`)}${more(x)}</td>
-    <td>${stack(x,p=>`<div class="pl">${p.direct?rc(p.direct.costRate):""}</div>`)}</td>
+    <td>${stack(x,p=>`<div class="pl">${p.direct?rc(p.direct.costRate):""}${p.direct&&x.nch>1?`<small>${esc(p.direct.name)}</small>`:""}</div>`)}</td>
     <td class="num">${stack(x,p=>`<div class="pl ${cls(p.direct?.profit)}"><b>${p.direct?yen(p.direct.profit):""}</b></div>`)}</td>`;
   m.innerHTML=`
   <section class="listhead">
@@ -650,7 +650,7 @@ function renderList(){
       <td class="num">${r.jp.qty.toLocaleString()} / ${r.cn.qty.toLocaleString()}</td>
       ${cell(r.jp,"jp")}${cell(r.cn,"cn")}</tr>`).join("")}</tbody>
   </table></div>
-  <p class="small muted">販売価格はパターン2まで表示し、原価率・利益は各パターンを1つ目の販売方法で計算した値です。原価率 = 原価 ÷ 手取り額。</p>`
+  <p class="small muted">販売価格はパターン2まで表示し、原価率・利益は、販売方法が複数ある場合は原価率がいちばん低い販売方法の値です（名前を下に表示）。原価率 = 原価 ÷ 手取り額。</p>`
   :`<section class="card empty"><h2>商品がありません</h2><p class="muted">「新規作成」から見積もりを作ると、ここに一覧で並びます。</p></section>`}`;
 }
 function render(){
