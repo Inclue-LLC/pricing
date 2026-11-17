@@ -379,8 +379,16 @@ const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&
 const uid=()=>"e"+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const n=v=>{const x=parseFloat(v);return isFinite(x)?x:0};
 const has=v=>v!=null&&v!==""&&isFinite(parseFloat(v));
-const yen=(v,d=1)=>v==null||!isFinite(v)?"—":(v<0?"-":"")+"¥"+Math.abs(v).toLocaleString("ja-JP",{minimumFractionDigits:d,maximumFractionDigits:d});
+const yen=(v,d=1)=>v==null||!isFinite(v)?"—":(v<0?"-":"")+Math.abs(v).toLocaleString("ja-JP",{minimumFractionDigits:d,maximumFractionDigits:d})+"円";
 const yen0=v=>yen(v,0);
+// money for a market: 日本販売 in 円, 中国販売 in 元 (amounts are held in 円 and converted at the estimate's CNY rate)
+const money=(mk,v,d=1,cnyRate)=>{
+  if(mk!=="cn")return yen(v,d);
+  const r=cnyRate??n(doc?.fx?.CNY);
+  if(v==null||!isFinite(v)||!(r>0))return "—";
+  const x=v/r,dd=d===0?0:2;
+  return (x<0?"-":"")+Math.abs(x).toLocaleString("ja-JP",{minimumFractionDigits:dd,maximumFractionDigits:dd})+"元";
+};
 const pct=v=>v==null||!isFinite(v)?"—":(v*100).toFixed(1)+"%";
 const cls=v=>v==null||!isFinite(v)?"":(v<0?"neg":"pos");
 const today=()=>new Date().toISOString().slice(0,10);
@@ -627,10 +635,10 @@ function renderList(){
   // up to two price patterns stacked in each cell, the rest summarised as "他◯パターン"
   const stack=(x,f)=>x.pats.length?x.pats.map(f).join(""):'<span class="muted">—</span>';
   const more=x=>x.npat>2?`<span class="sub">他${x.npat-2}パターン</span>`:"";
-  const cell=(x,mk)=>`<td class="num">${yen(x.cost)}</td>
-    <td class="num">${stack(x,p=>`<div class="pl">${yen0(p.price)}${mk==="cn"?`<small>${p.local.toLocaleString("ja-JP",{maximumFractionDigits:2})}元</small>`:""}</div>`)}${more(x)}</td>
+  const cell=(x,mk,d)=>{const M=(v,dd)=>money(mk,v,dd,n(d.fx.CNY));return `<td class="num">${M(x.cost)}</td>
+    <td class="num">${stack(x,p=>`<div class="pl">${M(p.price,0)}</div>`)}${more(x)}</td>
     <td>${stack(x,p=>`<div class="pl">${p.direct?rc(p.direct.costRate):""}${p.direct&&x.nch>1?`<small>${esc(p.direct.name)}</small>`:""}</div>`)}</td>
-    <td class="num">${stack(x,p=>`<div class="pl ${cls(p.direct?.profit)}"><b>${p.direct?yen(p.direct.profit):""}</b></div>`)}</td>`;
+    <td class="num">${stack(x,p=>`<div class="pl ${cls(p.direct?.profit)}"><b>${p.direct?M(p.direct.profit):""}</b></div>`)}</td>`};
   m.innerHTML=`
   <section class="listhead">
     <div><h2>商品一覧</h2><p class="small muted">${[charFilter&&`キャラクター「${esc(charFilter)}」`,themeFilter&&`テーマ「${esc(themeFilter)}」`].filter(Boolean).join("・")||"すべて"}の商品・${rows.length}件。行をクリックすると見積もりを開きます。</p></div>
@@ -648,7 +656,7 @@ function renderList(){
       <td>${r.d.theme&&String(r.d.theme).trim()?`<span class="themetag">${esc(String(r.d.theme).trim())}</span>`:'<span class="muted">—</span>'}</td>
       <td class="num">${has(r.d.size.height)?esc(r.d.size.height)+"cm":"—"}</td>
       <td class="num">${r.jp.qty.toLocaleString()} / ${r.cn.qty.toLocaleString()}</td>
-      ${cell(r.jp,"jp")}${cell(r.cn,"cn")}</tr>`).join("")}</tbody>
+      ${cell(r.jp,"jp",r.d)}${cell(r.cn,"cn",r.d)}</tr>`).join("")}</tbody>
   </table></div>
   <p class="small muted">販売価格はパターン2まで表示し、原価率・利益は、販売方法が複数ある場合は原価率がいちばん低い販売方法の値です（名前を下に表示）。原価率 = 原価 ÷ 手取り額。</p>`
   :`<section class="card empty"><h2>商品がありません</h2><p class="muted">「新規作成」から見積もりを作ると、ここに一覧で並びます。</p></section>`}`;
@@ -686,7 +694,7 @@ function render(){
   <div class="mini" id="mini" hidden></div>
 
   <section id="s-summary" style="display:flex;flex-direction:column;gap:12px">
-    <div class="summary-h"><h2 style="font-size:18px">結果サマリー</h2><span class="small muted">金額は円・税抜、1個あたりは良品1個あたり</span></div>
+    <div class="summary-h"><h2 style="font-size:18px">結果サマリー</h2><span class="small muted">日本販売は円、中国販売は元（税抜）。1個あたりは良品1個あたり</span></div>
     <div class="legend"><span class="cat-mfg"><i class="dot"></i>製造費用</span><span class="cat-log"><i class="dot"></i>物流</span><span class="cat-duty"><i class="dot"></i>関税</span><span class="cat-tax"><i class="dot"></i>輸入消費税</span><span class="cat-fee"><i class="dot"></i>立替手数料</span><span class="cat-roy"><i class="dot"></i>ロイヤリティ</span><span>　原価率 = 原価 ÷ 1個あたりの手取り額</span></div>
     <div class="markets-sum" id="sumBody"></div>
   </section>
@@ -775,7 +783,7 @@ function render(){
         <h3><span class="tag ${mk}">${mk==="jp"?"日本販売":"中国販売"}</span></h3>
         <div class="subhead">販売価格（税抜）</div>
         <div class="tbl-wrap"><table class="in prices">
-          <thead><tr><th>パターン</th><th class="r">価格（${u}）</th><th class="r">${mk==="jp"?"税込":"円換算"}</th><th></th></tr></thead>
+          <thead><tr><th>パターン</th><th class="r">価格（${u}）</th><th class="r">${mk==="jp"?"税込":""}</th><th></th></tr></thead>
           <tbody>${s.prices.map((p,i)=>`<tr>
             <td><span class="pname">パターン${i+1}</span></td>
             <td class="r">${numIn(`sales.${mk}.prices.${i}.price`,p.price,"販売価格",110)}</td>
@@ -820,9 +828,9 @@ function sellThrough(mk,R){
   total.breakeven=afterAll>0?lc/afterAll:null;
   return {pi,per,total,ry};
 }
-function stTable(x){
+function stTable(x,mk){
   return `<table class="chtbl st-t"><thead><tr><th>消化率</th><th>販売数</th><th>売上（手取り）</th><th>利益</th><th>利益率</th></tr></thead><tbody>
-    ${x.rows.map(y=>`<tr${y.profit<0?' class="loss"':""}><td><b>${Math.round(y.r*100)}%</b></td><td class="num">${Math.round(y.sold).toLocaleString()}個</td><td class="num">${yen0(y.rev)}</td><td class="num ${cls(y.profit)}"><b>${yen0(y.profit)}</b></td><td class="num ${cls(y.margin)}">${pct(y.margin)}</td></tr>`).join("")}
+    ${x.rows.map(y=>`<tr${y.profit<0?' class="loss"':""}><td><b>${Math.round(y.r*100)}%</b></td><td class="num">${Math.round(y.sold).toLocaleString()}個</td><td class="num">${money(mk,y.rev,0)}</td><td class="num ${cls(y.profit)}"><b>${money(mk,y.profit,0)}</b></td><td class="num ${cls(y.margin)}">${pct(y.margin)}</td></tr>`).join("")}
   </tbody></table>`;
 }
 function beTag(be){return be==null?"":`<span class="be${be>1?" ng":""}">損益分岐 ${be>1?"100%超（完売しても赤字）":pct(be)}</span>`}
@@ -838,10 +846,10 @@ function sellBlock(mk,R){
     </div>
     ${S.per.length?S.per.map(x=>`<div class="stc">
         <div class="stc-h"><span class="chname ch-${x.c.key}">${esc(x.c.name)}${x.c.terms?`<small>${esc(x.c.terms)}</small>`:""}</span><span class="stc-q">製造 ${x.c.qty.toLocaleString()}個（良品 ${(Math.round(x.good*10)/10).toLocaleString()}個）</span>${beTag(x.breakeven)}</div>
-        ${stTable(x)}
+        ${stTable(x,mk)}
       </div>`).join("")+(S.per.length>1?`<div class="stc total">
         <div class="stc-h"><span class="chname">合計</span><span class="stc-q">良品 ${(Math.round(S.total.good*10)/10).toLocaleString()}個</span>${beTag(S.total.breakeven)}</div>
-        ${stTable(S.total)}
+        ${stTable(S.total,mk)}
       </div>`:"")+`<p class="small muted">各販売方法の製造数（ロス率を引いた良品数）に消化率を掛けて販売数を出し、その販売方法の製造分の原価（売れ残り分を含む）を差し引いた利益です。${S.ry.sold?"販売数ごとのロイヤリティは、売れた数の分だけ差し引いています。":""}</p>`
     :`<div class="hint">販売方法ごとの数量を入れると表示されます。</div>`}
   </div>`;
@@ -914,7 +922,7 @@ function updateOutputs(){
   }
   const s=doc.sales;
   s.jp.prices.forEach((p,i)=>set("jpPrice"+i,has(p.price)?yen0(n(p.price)*1.1):"—"));
-  s.cn.prices.forEach((p,i)=>set("cnPrice"+i,has(p.price)?yen0(n(p.price)*n(doc.fx.CNY)):"—"));
+  s.cn.prices.forEach((p,i)=>set("cnPrice"+i,""));
   const fn=$("#fxNote");
   if(fn){
     fn.innerHTML=`<span>最新レート：<b>1元 = ${esc(commonFx.CNY)}円</b> / <b>1ドル = ${esc(commonFx.USD)}円</b> <span class="muted">（${esc(commonFx.note||"")} ${esc(commonFx.updatedAt||"")}）</span></span>
@@ -927,29 +935,29 @@ function updateOutputs(){
     const ry=royalty(mk,selPrice(mk)),cost=base==null?null:base+ry.pc;
     const costAt=local=>base==null?null:base+royalty(mk,local).pc;
     const seg=[["roy",ry.pc,"ロイヤリティ"],["mfg",R.mfg,"製造費用"],["log",R.log.all+(mk==="jp"?R.log.jp:R.log.cn),"物流"],["duty",mk==="jp"?R.dutyPc:0,"関税"],["tax",mk==="jp"?R.taxPc:0,"輸入消費税"],["fee",mk==="jp"?R.feePc:0,"立替手数料"]];
-    const bar=cost>0?`<div class="bar" role="img" aria-label="原価の内訳">${seg.filter(x=>x[1]>0).map(([k,v,l])=>`<span class="${k}" style="width:${(v/cost*100).toFixed(2)}%" title="${l} ${yen(v)}"></span>`).join("")}</div>`:`<div class="bar"></div>`;
-    const cnyNote=[mk==="cn"&&cost!=null&&n(doc.fx.CNY)?`${(cost/n(doc.fx.CNY)).toFixed(2)}元`:"",
-      ry.pc?`うちロイヤリティ ${yen(ry.pc)}（${doc.royalty.basis==="sold"?"販売数ごと":"製造数ごと"}・パターン${Math.round(n(doc.sell[mk].pattern))+1}の価格で計算）`:"",
+    const bar=cost>0?`<div class="bar" role="img" aria-label="原価の内訳">${seg.filter(x=>x[1]>0).map(([k,v,l])=>`<span class="${k}" style="width:${(v/cost*100).toFixed(2)}%" title="${l} ${money(mk,v)}"></span>`).join("")}</div>`:`<div class="bar"></div>`;
+    const cnyNote=[
+      ry.pc?`うちロイヤリティ ${money(mk,ry.pc)}（${doc.royalty.basis==="sold"?"販売数ごと":"製造数ごと"}・パターン${Math.round(n(doc.sell[mk].pattern))+1}の価格で計算）`:"",
       mk==="jp"&&(R.dutyPc+R.taxPc+R.feePc)?`うち関税・輸入消費税・立替手数料 ${yen(R.dutyPc+R.taxPc+R.feePc)}`:""].filter(Boolean).join("<br>");
     const pats=doc.sales[mk].prices.map((p,i)=>({label:`パターン${i+1}`,ch:channels(mk,costAt(p.price),p.price)})).filter(x=>x.ch);
     const body=!pats.length?`<div class="hint">販売価格を入れると、販売方法ごとの原価率と利益が表示されます。</div>`:cost==null?`<div class="hint">製造数量を入力すると、原価率と利益が計算されます。</div>`:
       pats.map(({label,ch})=>`<div class="pblock">
-        <div class="pblock-h"><span class="pname">${esc(label)}</span><span class="pval">${yen0(ch.price)}</span><span class="small muted">${mk==="cn"?`${ch.local.toLocaleString("ja-JP",{maximumFractionDigits:2})}元`:`税込 ${yen0(ch.price*1.1)}`}</span></div>
+        <div class="pblock-h"><span class="pname">${esc(label)}</span><span class="pval">${money(mk,ch.price,0)}</span><span class="small muted">${mk==="cn"?"":`税込 ${yen0(ch.price*1.1)}`}</span></div>
         <table class="chtbl"><thead><tr><th>販売方法</th><th>数量</th><th>手取り / 個</th><th>原価率</th><th>利益 / 個</th></tr></thead><tbody>
-        ${ch.list.map(c=>`<tr><td><span class="chname ch-${c.key}">${esc(c.name)}${c.terms?`<small>${esc(c.terms)}</small>`:""}</span></td><td class="num">${c.qty.toLocaleString()}個</td><td class="num">${c.net==null?"—":yen0(c.net)}</td><td>${c.costRate==null?"—":`<span class="rate ${rateCls(c.costRate)}">${pct(c.costRate)}</span>`}</td><td class="num ${cls(c.profit)}"><b>${yen(c.profit)}</b></td></tr>`).join("")}
+        ${ch.list.map(c=>`<tr><td><span class="chname ch-${c.key}">${esc(c.name)}${c.terms?`<small>${esc(c.terms)}</small>`:""}</span></td><td class="num">${c.qty.toLocaleString()}個</td><td class="num">${c.net==null?"—":money(mk,c.net,mk==="cn"?1:0)}</td><td>${c.costRate==null?"—":`<span class="rate ${rateCls(c.costRate)}">${pct(c.costRate)}</span>`}</td><td class="num ${cls(c.profit)}"><b>${money(mk,c.profit)}</b></td></tr>`).join("")}
         </tbody></table></div>`).join("");
     return `<div class="msum ${mk}">
       <div class="msum-h"><h3>${mk==="jp"?"日本販売":"中国販売"}</h3><span class="q">製造 ${qty.toLocaleString()}個 ／ 良品 ${(Math.round(good*10)/10).toLocaleString()}個</span></div>
       <div class="msum-b">
         <div class="figs">
-          <div class="fig cost"><span class="lb">原価 / 個</span><span class="v">${yen(cost)}</span>${bar}<span class="u">${cnyNote}</span></div>
+          <div class="fig cost"><span class="lb">原価 / 個</span><span class="v">${money(mk,cost)}</span>${bar}<span class="u">${cnyNote}</span></div>
         </div>
         ${body}
         ${sellBlock(mk,R)}
       </div></div>`;
   }).join("");
   const mini=$("#mini");
-  if(mini)mini.innerHTML=`<strong>${esc(titleOf(doc))}</strong><span class="p"><span class="tag jp">日本 原価</span><b>${yen(R.costJP)}</b></span><span class="p"><span class="tag cn">中国 原価</span><b>${yen(R.costCN)}</b></span>`;
+  if(mini)mini.innerHTML=`<strong>${esc(titleOf(doc))}</strong><span class="p"><span class="tag jp">日本 原価</span><b>${yen(R.costJP)}</b></span><span class="p"><span class="tag cn">中国 原価</span><b>${money("cn",R.costCN)}</b></span>`;
 }
 
 // Hierarchy: キャラクター → テーマ → 商品. Theme chips list only the themes of the chosen character.
